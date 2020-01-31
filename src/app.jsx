@@ -2,60 +2,15 @@ import GoldenLayout from 'golden-layout';
 import React from 'react';
 import ReactDOM from 'react-dom';
 import Markdown from 'react-markdown';
-import { LGraph, LGraphCanvas, LiteGraph } from 'litegraph.js';
 import './css/main.css';
 import 'litegraph.js/css/litegraph.css'
 import AceEditor from 'react-ace';
 import 'brace/mode/assembly_x86';
 // Import a Theme (okadia, github, xcode etc)
 import 'brace/theme/tomorrow_night_eighties';
-// import './3rdparty/gl-matrix-min.js';
-// import GL_INIT from './3rdparty/litegl';
 import { JSONEditor } from 'react-json-editor-viewer';
-
-var GL = require("litegl");
-window.GL = GL;
-// var LG = require("litegraph.js");
-// var LGraph = LG.LGraph;
-// var LGraphCanvas = LG.LGraphCanvas;
-// var LiteGraph = LG.LiteGraph;
-
-class GLComponent extends React.Component {
-  constructor(props, context) {
-    super(props, context);
-    this.graph = new LGraph();
-    this.canvas = null;
-    this.onResize = this.onResize.bind(this);
-  }
-
-  componentDidMount() {
-    // var GL = GL_INIT(window);
-    var gl = GL.create({width:800, height:600});
-    document.getElementById("myglcanvas").appendChild( gl.canvas );
-    console.log(gl);
-    // var texture = GL.Texture.fromURL("image.jpg", { minFilter: gl.LINEAR_MIPMAP_LINEAR });
-    // gl.ondraw = function() {
-    //   texture.bind(0);
-    //   var my_uniforms = { u_texture: 0, u_color: [1,1,1,1] };
-    //   shader.uniforms( my_uniforms ).draw( mesh );
-    // }
-    
-    // gl.animate(); //calls the requestAnimFrame constantly, which will call ondraw
-  }
-
-  onResize() {
-    this.canvas.resize();
-  }
-
-
-  render() {
-
-    return (
-      <div id='myglcanvas' width='50%' height='50%' style={{ border: '1px solid' }}></div>
-
-    );
-  }
-}
+import { LGraph, LGraphCanvas, LiteGraph } from 'litegraph.js';
+import GLComponent from './glnodes';
 
 class GraphNodeComponent extends React.Component {
   constructor(props, context) {
