@@ -69,7 +69,7 @@ class GLComponent extends React.Component {
         regl.texture({ type: 'float' }) // position
       ],
       depth: true
-    })
+    });
 
     var boxPosition = [
       // side faces
@@ -79,7 +79,7 @@ class GLComponent extends React.Component {
       [-0.5, +0.5, -0.5], [-0.5, +0.5, +0.5], [-0.5, -0.5, +0.5], [-0.5, -0.5, -0.5], // negative x face.
       [-0.5, +0.5, -0.5], [+0.5, +0.5, -0.5], [+0.5, +0.5, +0.5], [-0.5, +0.5, +0.5],  // top face
       [-0.5, -0.5, -0.5], [+0.5, -0.5, -0.5], [+0.5, -0.5, +0.5], [-0.5, -0.5, +0.5]  // bottom face
-    ]
+    ];
 
     const boxElements = [
       [2, 1, 0], [2, 0, 3],
@@ -88,7 +88,7 @@ class GLComponent extends React.Component {
       [14, 13, 12], [14, 12, 15],
       [18, 17, 16], [18, 16, 19],
       [20, 21, 22], [23, 20, 22]
-    ]
+    ];
 
     // all the normals of a single block.
     var boxNormal = [
@@ -101,7 +101,7 @@ class GLComponent extends React.Component {
       [0.0, +1.0, 0.0], [0.0, +1.0, 0.0], [0.0, +1.0, 0.0], [0.0, +1.0, 0.0],
       // bottom
       [0.0, -1.0, 0.0], [0.0, -1.0, 0.0], [0.0, -1.0, 0.0], [0.0, -1.0, 0.0]
-    ]
+    ];
 
     // The view and projection matrices of the camera are used all over the place,
     // so we put them in the global scope for easy access.
@@ -115,7 +115,7 @@ class GLComponent extends React.Component {
             0.01,
             2000)
       }
-    })
+    });
 
     const outputGBuffer = regl({
       frag: `
@@ -425,7 +425,7 @@ class GLComponent extends React.Component {
       //
       drawPointLight(pointLights)
     }
-
+    var printed = false;
     regl.frame(({ tick, viewportWidth, viewportHeight }) => {
       fbo.resize(viewportWidth, viewportHeight)
 
@@ -450,6 +450,64 @@ class GLComponent extends React.Component {
       })
 
       camera.tick()
+      if (!printed) {
+        const tmp_fbo = regl.framebuffer({
+          color: [
+            regl.texture({ type: 'uint8' })
+          ]
+        });
+        tmp_fbo.resize(fbo.width, fbo.height);
+        var draw_fs = regl({
+          frag: `
+          precision mediump float;
+          varying vec2 uv;
+          uniform sampler2D in_tex;
+          void main() {
+            gl_FragColor = vec4(texture2D(in_tex, uv).xyz, 1.0);
+          }`,
+          vert: `
+          precision mediump float;
+          attribute vec2 position;
+          varying vec2 uv;
+          void main() {
+            uv = 0.5 * (position + 1.0);
+            gl_Position = vec4(position, 0, 1);
+          }`,
+          attributes: {
+            // We implement the full-screen pass by using a full-screen triangle
+            position: [-4, -4, 4, -4, 0, 4]
+          },
+          uniforms: {
+            in_tex: fbo.color[1]
+          },
+          depth: { enable: false },
+          count: 3
+        });
+
+
+        console.log(fbo);
+        var result
+        regl({ framebuffer: tmp_fbo })(() => {
+          draw_fs();
+          result = regl.read();
+
+        });
+        tmp_fbo.destroy();
+        printed = true;
+        var canvas_container = document.getElementById("myglcanvas_container");
+        var myCanvas = document.createElement("canvas");
+        canvas_container.appendChild(myCanvas);
+        myCanvas.width = fbo.color[0].width;
+        myCanvas.height = fbo.color[0].height;
+        var myCanvasContext = myCanvas.getContext("2d"); // Get canvas 2d context
+        // var b64imgData = btoa(result); //Binary to ASCII, where it probably stands for
+        var array = new Uint8ClampedArray(result);
+        var image = new ImageData(array, fbo.width, fbo.height);
+        myCanvasContext.putImageData(image, 0, 0);
+        // myCanvasContext.drawImage(img, 0, 0); // Draw the texture
+        console.log(result);
+        
+      }
     })
 
 
