@@ -13,15 +13,42 @@ import { LGraph, LGraphCanvas, LiteGraph, LGraphNode } from 'litegraph.js';
 import GLComponent from './glnodes';
 import * as dat from 'dat.gui';
 
-class MyTestNode extends LGraphNode {
+class BackBufferNode extends LGraphNode {
   constructor() {
     super();
-    this.addInput("A", "number");
-    this.addInput("B", "number");
-    this.addOutput("A+B", "number");
-    this.properties = { precision: 1 };
-    this.title = "Test Node";
+    this.addInput("in", "texture_t");
+    this.properties = {};
+    this.title = "Back Buffer Node";
+  }
+}
 
+class DrawCallNode extends LGraphNode {
+  constructor() {
+    super();
+    this.addOutput("out", "drawcall_t");
+    this.properties = {};
+    this.title = "Draw Call Node";
+    this.text = this.addWidget("text", "Attrubute Name", "edit me", function (v) { }, {});
+    this.addAttribute = this.addAttribute.bind(this);
+    this.button = this.addWidget("button", "Add Attrubute", null, (v) => { this.addAttribute(this.text.value) }, {});
+  }
+
+  addAttribute(name) {
+    this.addInput(name, "attribute_t");
+  }
+}
+
+class PassNode extends LGraphNode {
+  constructor() {
+    super();
+    this.addInput("in#0", "texture_t");
+    this.addInput("in#0", "vec4_t");
+    this.addOutput("out#0", "texture_t");
+    this.addDC = this.addDC.bind(this);
+    this.slider = this.addWidget("slider", "Slider", 0.5, function (v) { }, { min: 0, max: 1 });
+    this.button = this.addWidget("button", "Button", null, (v) => { this.addDC(); }, {});
+    this.properties = { dc_cnt: 0 };
+    this.title = "Pass Node";
   }
 
   onExecute() {
@@ -31,7 +58,7 @@ class MyTestNode extends LGraphNode {
     var B = this.getInputData(1);
     if (B === undefined)
       B = 0;
-    this.setOutputData(0, A + B);
+    this.setOutputData(0, "texture_0");
   }
 
   onDrawBackground(ctx) {
@@ -50,7 +77,25 @@ class MyTestNode extends LGraphNode {
     ctx.strokeStyle = "#555";
 
 
-  };
+  }
+
+  clearInput() {
+    let len = this.inputs.length;
+    for (let i = len - 1; i >= 0; i--) {
+      this.removeInput(i);
+    }
+    this.properties.dc_cnt = 0;
+  }
+
+  addDC() {
+    this.addInput("DC#" + this.properties.dc_cnt, "drawcall_t");
+    this.properties.dc_cnt += 1;
+  }
+
+  onMouseDown(e, local_pos) {
+
+    // this.addOutput("A-B", "number");
+  }
 
 }
 
@@ -124,7 +169,10 @@ class GraphNodeComponent extends React.Component {
 
     //register in the system
     LiteGraph.registerNodeType("gfx/sum", MyAddNode);
-    LiteGraph.registerNodeType("gfx/test", MyTestNode);
+    LiteGraph.registerNodeType("gfx/test", PassNode);
+    LiteGraph.registerNodeType("gfx/BackBufferNode", BackBufferNode);
+    LiteGraph.registerNodeType("gfx/DrawCallNode", DrawCallNode);
+    this.dumpJson();
   }
 
   onResize() {
@@ -135,7 +183,9 @@ class GraphNodeComponent extends React.Component {
     var json = this.graph.serialize();
     console.log(JSON.stringify(json));
     // var data = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(json));
-    json = { "last_node_id": 4, "last_link_id": 4, "nodes": [{ "id": 2, "type": "basic/watch", "pos": [700, 200], "size": { "0": 140, "1": 26 }, "flags": {}, "order": 3, "mode": 0, "inputs": [{ "name": "value", "type": 0, "link": 2, "label": "5.000" }], "properties": {} }, { "id": 1, "type": "basic/const", "pos": [200, 200], "size": { "0": 140, "1": 26 }, "flags": {}, "order": 0, "mode": 0, "outputs": [{ "name": "value", "type": "number", "links": [3], "label": "4.500" }], "properties": { "value": 4.5 } }, { "id": 4, "type": "widget/knob", "pos": [141, 589], "size": [64, 84], "flags": {}, "order": 1, "mode": 0, "outputs": [{ "name": "", "type": "number", "links": [4] }], "properties": { "min": 0, "max": 1, "value": 0.5, "color": "#7AF", "precision": 2 }, "boxcolor": "rgba(128,128,128,1.0)" }, { "id": 3, "type": "gfx/test", "pos": { "0": 378, "1": 416, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0, "8": 0, "9": 0 }, "size": { "0": 197, "1": 158 }, "flags": {}, "order": 2, "mode": 0, "inputs": [{ "name": "A", "type": "number", "link": 3 }, { "name": "B", "type": "number", "link": 4 }], "outputs": [{ "name": "A+B", "type": "number", "links": [2] }], "title": "Test Node", "properties": { "precision": 666 } }], "links": [[2, 3, 0, 2, 0, 0], [3, 1, 0, 3, 0, "number"], [4, 4, 0, 3, 1, "number"]], "groups": [], "config": {}, "version": 0.4 };
+
+    json = require('./default_graph.json');
+
     var graph = this.graph;
     graph.clear();
     setTimeout(function () {
@@ -341,6 +391,25 @@ class GoldenLayoutWrapper extends React.Component {
     window.addEventListener('resize', () => {
       layout.updateSize();
     });
+    var TokenString = require('glsl-tokenizer/string');
+    var ParseTokens = require('glsl-parser/direct');
+    // var reader = new FileReader();
+
+    // reader.onload = function (theFile) {
+
+    // };
+
+    // reader.readAsDataURL('test.glsl');
+
+
+    fetch('shaders/test.glsl')
+      .then(response => response.text())
+      .then(text => {
+        console.log(text);
+        var tokens = TokenString(text);
+        var ast = ParseTokens(tokens);
+        console.log(ast);
+      });
 
   }
 
