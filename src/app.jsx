@@ -9,8 +9,50 @@ import 'brace/mode/assembly_x86';
 // Import a Theme (okadia, github, xcode etc)
 import 'brace/theme/tomorrow_night_eighties';
 import { JSONEditor } from 'react-json-editor-viewer';
-import { LGraph, LGraphCanvas, LiteGraph } from 'litegraph.js';
+import { LGraph, LGraphCanvas, LiteGraph, LGraphNode } from 'litegraph.js';
 import GLComponent from './glnodes';
+import * as dat from 'dat.gui';
+
+class MyTestNode extends LGraphNode {
+  constructor() {
+    super();
+    this.addInput("A", "number");
+    this.addInput("B", "number");
+    this.addOutput("A+B", "number");
+    this.properties = { precision: 1 };
+    this.title = "Test Node";
+
+  }
+
+  onExecute() {
+    var A = this.getInputData(0);
+    if (A === undefined)
+      A = 0;
+    var B = this.getInputData(1);
+    if (B === undefined)
+      B = 0;
+    this.setOutputData(0, A + B);
+  }
+
+  onDrawBackground(ctx) {
+    if (this.flags.collapsed) {
+      return;
+    }
+
+    var size = this.size;
+
+    var scale = (0.5 * size[1]) / this.properties.scale;
+
+    var offset = size[1] * 0.5;
+
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, size[0], size[1]);
+    ctx.strokeStyle = "#555";
+
+
+  };
+
+}
 
 class GraphNodeComponent extends React.Component {
   constructor(props, context) {
@@ -18,6 +60,7 @@ class GraphNodeComponent extends React.Component {
     this.graph = new LGraph();
     this.canvas = null;
     this.onResize = this.onResize.bind(this);
+    this.dumpJson = this.dumpJson.bind(this);
   }
 
   componentDidMount() {
@@ -81,19 +124,35 @@ class GraphNodeComponent extends React.Component {
 
     //register in the system
     LiteGraph.registerNodeType("gfx/sum", MyAddNode);
-
+    LiteGraph.registerNodeType("gfx/test", MyTestNode);
   }
 
   onResize() {
     this.canvas.resize();
   }
 
+  dumpJson() {
+    var json = this.graph.serialize();
+    console.log(JSON.stringify(json));
+    // var data = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(json));
+    json = { "last_node_id": 4, "last_link_id": 4, "nodes": [{ "id": 2, "type": "basic/watch", "pos": [700, 200], "size": { "0": 140, "1": 26 }, "flags": {}, "order": 3, "mode": 0, "inputs": [{ "name": "value", "type": 0, "link": 2, "label": "5.000" }], "properties": {} }, { "id": 1, "type": "basic/const", "pos": [200, 200], "size": { "0": 140, "1": 26 }, "flags": {}, "order": 0, "mode": 0, "outputs": [{ "name": "value", "type": "number", "links": [3], "label": "4.500" }], "properties": { "value": 4.5 } }, { "id": 4, "type": "widget/knob", "pos": [141, 589], "size": [64, 84], "flags": {}, "order": 1, "mode": 0, "outputs": [{ "name": "", "type": "number", "links": [4] }], "properties": { "min": 0, "max": 1, "value": 0.5, "color": "#7AF", "precision": 2 }, "boxcolor": "rgba(128,128,128,1.0)" }, { "id": 3, "type": "gfx/test", "pos": { "0": 378, "1": 416, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0, "8": 0, "9": 0 }, "size": { "0": 197, "1": 158 }, "flags": {}, "order": 2, "mode": 0, "inputs": [{ "name": "A", "type": "number", "link": 3 }, { "name": "B", "type": "number", "link": 4 }], "outputs": [{ "name": "A+B", "type": "number", "links": [2] }], "title": "Test Node", "properties": { "precision": 666 } }], "links": [[2, 3, 0, 2, 0, 0], [3, 1, 0, 3, 0, "number"], [4, 4, 0, 3, 1, "number"]], "groups": [], "config": {}, "version": 0.4 };
+    var graph = this.graph;
+    graph.clear();
+    setTimeout(function () {
+      graph.configure(json, false);
+    }, 1000);
+
+  }
 
   render() {
 
     return (
-      <canvas id='mycanvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
-
+      <div style={{ width: '100%', height: '100%' }} id="mycanvas_container">
+        <button style={{ margin: 10 }} onClick={this.dumpJson}>
+          Get json
+                </button>
+        <canvas id='mycanvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
+      </div>
     );
   }
 }
@@ -171,6 +230,42 @@ class TextEditorComponent extends React.Component {
   }
 }
 
+class InputNode extends React.Component {
+
+  constructor(props, context) {
+    super(props, context);
+
+  }
+
+  componentDidMount() {
+
+    var text = {
+      message: 'dat.gui',
+      speed: 0.8,
+      displayOutline: false,
+    };
+
+    var gui = new dat.GUI({ autoPlace: false });
+    var menu = gui.addFolder('folder');
+    menu.add(text, 'message');
+    menu.add(text, 'speed', -5, 5);
+    menu.add(text, 'displayOutline');
+
+    var customContainer = document.getElementById('InputDodeWrapper');
+    customContainer.appendChild(gui.domElement);
+
+
+  }
+
+  render() {
+
+    return (
+      <div id='InputDodeWrapper'>
+      </div>
+    );
+  }
+}
+
 class GoldenLayoutWrapper extends React.Component {
   constructor(props, context) {
     super(props, context);
@@ -186,24 +281,42 @@ class GoldenLayoutWrapper extends React.Component {
         content: [
           {
             type: 'react-component',
+            isClosable: false,
             component: 'TextEditor',
             title: 'TextEditor',
             props: { globals: () => this.globals }
 
+
           },
           {
             type: 'react-component',
+            isClosable: false,
             component: 'Graphs',
             title: 'Graphs',
-            props: { globals: () => this.globals }
+            props: { globals: () => this.globals },
+            width: 145
 
           },
           {
-            type: 'react-component',
-            component: 'GLW',
-            title: 'GLW',
-            props: { globals: () => this.globals }
+            type: 'column',
+            width: 84,
+            content: [{
+              type: 'react-component',
+              isClosable: false,
+              component: 'GLW',
+              title: 'GLW',
+              height: 62,
+              props: { globals: () => this.globals }
 
+            }, {
+              type: 'react-component',
+              isClosable: false,
+              component: 'InputNode',
+              title: 'InputNode',
+              props: { globals: () => this.globals }
+
+            },
+            ]
           }
 
         ]
@@ -219,7 +332,9 @@ class GoldenLayoutWrapper extends React.Component {
     layout.registerComponent('TextEditor',
       TextEditorComponent
     );
-
+    layout.registerComponent('InputNode',
+      InputNode
+    );
     layout.init();
     window.React = React;
     window.ReactDOM = ReactDOM;

@@ -494,18 +494,18 @@ class GLComponent extends React.Component {
         });
         tmp_fbo.destroy();
         printed = true;
-        var canvas_container = document.getElementById("myglcanvas_container");
-        var myCanvas = document.createElement("canvas");
-        canvas_container.appendChild(myCanvas);
-        myCanvas.width = fbo.color[0].width;
-        myCanvas.height = fbo.color[0].height;
-        var myCanvasContext = myCanvas.getContext("2d"); // Get canvas 2d context
-        // var b64imgData = btoa(result); //Binary to ASCII, where it probably stands for
-        var array = new Uint8ClampedArray(result);
-        var image = new ImageData(array, fbo.width, fbo.height);
-        myCanvasContext.putImageData(image, 0, 0);
-        // myCanvasContext.drawImage(img, 0, 0); // Draw the texture
-        console.log(result);
+        // var canvas_container = document.getElementById("myglcanvas_container");
+        // var myCanvas = document.createElement("canvas");
+        // canvas_container.appendChild(myCanvas);
+        // myCanvas.width = fbo.color[0].width;
+        // myCanvas.height = fbo.color[0].height;
+        // var myCanvasContext = myCanvas.getContext("2d"); // Get canvas 2d context
+        // // var b64imgData = btoa(result); //Binary to ASCII, where it probably stands for
+        // var array = new Uint8ClampedArray(result);
+        // var image = new ImageData(array, fbo.width, fbo.height);
+        // myCanvasContext.putImageData(image, 0, 0);
+        // // myCanvasContext.drawImage(img, 0, 0); // Draw the texture
+        // console.log(result);
         
       }
     })
@@ -699,20 +699,7 @@ class GLComponent extends React.Component {
     renderer.render(scene, camera);
 
 
-    var text = {
-      message: 'dat.gui',
-      speed: 0.8,
-      displayOutline: false,
-    };
-
-    var gui = new dat.GUI({ autoPlace: false });
-    var menu = gui.addFolder('folder');
-    menu.add(text, 'message');
-    menu.add(text, 'speed', -5, 5);
-    menu.add(text, 'displayOutline');
-
-    var customContainer = document.getElementById('myglcanvas_container');
-    customContainer.appendChild(gui.domElement);
+    
 
   }
 
