@@ -5,13 +5,43 @@ import Markdown from 'react-markdown';
 import './css/main.css';
 import 'litegraph.js/css/litegraph.css'
 import AceEditor from 'react-ace';
-import 'brace/mode/assembly_x86';
+import 'brace/mode/glsl';
 // Import a Theme (okadia, github, xcode etc)
 import 'brace/theme/tomorrow_night_eighties';
 import { JSONEditor } from 'react-json-editor-viewer';
 import { LGraph, LGraphCanvas, LiteGraph, LGraphNode } from 'litegraph.js';
 import GLComponent from './glnodes';
 import * as dat from 'dat.gui';
+var TokenString = require('glsl-tokenizer/string');
+var ParseTokens = require('glsl-parser/direct');
+
+// Actually, lets make a global state object
+let global_state = {};
+// Injected by text editor. edit_text(text) sends text to the editor
+global_state.edit_text = null;
+// Reference to the selected draw call
+global_state.selected_pipeline = null;
+global_state.set_text = (v) => {
+  if (global_state.selected_pipeline) global_state.selected_pipeline.set_text(v);
+};
+// Reference to the litegraph instance
+global_state.litegraph = new LGraph();
+// A list of subscribers to notify when graph is loaded
+global_state.on_graph_loaded = [];
+
+// TODO:
+// * shader node/pipeline node
+// * drawcall node
+//   * input attribute stream
+//   * input uniform hvalues(matrices, vector, float, ints, textures+texture sizes)
+// * camera node(generates look,up,left vectors and view/projection/inverse matrices)
+// * shader code editing
+//   * live update
+// * pass node
+//   * multiple drawcalls as inputs
+//   * multiple output render targets
+//   * live view render targets(configure custom visualization shader)
+
 
 class BackBufferNode extends LGraphNode {
   constructor() {
@@ -22,15 +52,153 @@ class BackBufferNode extends LGraphNode {
   }
 }
 
-class DrawCallNode extends LGraphNode {
+class PipelineNode extends LGraphNode {
   constructor() {
     super();
+    this.set_text = this.set_text.bind(this);
+    this.parse_shader = this.parse_shader.bind(this);
+    this.shader_valid = false;
     this.addOutput("out", "drawcall_t");
-    this.properties = {};
+    this.properties = { code: "" };
     this.title = "Draw Call Node";
     this.text = this.addWidget("text", "Attrubute Name", "edit me", function (v) { }, {});
     this.addAttribute = this.addAttribute.bind(this);
     this.button = this.addWidget("button", "Add Attrubute", null, (v) => { this.addAttribute(this.text.value) }, {});
+    this.attributes = [];
+  }
+
+  parse_shader() {
+    let len = this.inputs.length;
+    for (let i = len - 1; i >= 0; i--) {
+      this.removeInput(i);
+    }
+    this.shader_valid = false;
+    this.attributes = [];
+    try {
+      var tokens = TokenString(this.properties.code);
+      var ast = ParseTokens(tokens);
+      // console.log(ast);
+      for (let i = 0; i < ast.children.length; i++) {
+        let chld = ast.children[i];
+        // console.log(chld);
+        if (chld.token.data == "attribute") {
+          var type = null;
+          for (let j = 0; j < chld.children[0].children.length; j++) {
+            let chld_1 = chld.children[0].children[j];
+
+            if (chld_1.type == "decllist") {
+              let name = chld_1.children[0].data;
+              // console.log(type + " " + chld_1.children[0].data);
+              this.attributes.push({ name: name, type: type });
+            }
+
+            if (chld_1.token.type == "keyword") {
+              type = chld_1.token.data + "_t";
+            }
+          }
+
+        }
+      }
+      this.shader_valid = true;
+    } catch (e) {
+      console.log(e);
+    }
+    if (this.shader_valid) {
+      for (let i in this.attributes) {
+        this.addAttribute(this.attributes[i].name);
+      }
+    }
+  }
+
+  set_text(v) {
+    this.properties.code = v;
+    this.parse_shader();
+  }
+
+  onSelected() {
+    global_state.selected_pipeline = this;
+    global_state.edit_text(this.properties.code);
+  }
+
+  onDeselected() {
+    global_state.selected_pipeline = null;
+  }
+
+  addAttribute(name) {
+    this.addInput(name, "attribute_t");
+  }
+}
+
+class DrawCallNode extends LGraphNode {
+  constructor() {
+    super();
+    this.set_text = this.set_text.bind(this);
+    this.parse_shader = this.parse_shader.bind(this);
+    this.shader_valid = false;
+    this.addOutput("out", "drawcall_t");
+    this.properties = { code: "" };
+    this.title = "Draw Call Node";
+    this.text = this.addWidget("text", "Attrubute Name", "edit me", function (v) { }, {});
+    this.addAttribute = this.addAttribute.bind(this);
+    this.button = this.addWidget("button", "Add Attrubute", null, (v) => { this.addAttribute(this.text.value) }, {});
+    this.attributes = [];
+  }
+
+  parse_shader() {
+    let len = this.inputs.length;
+    for (let i = len - 1; i >= 0; i--) {
+      this.removeInput(i);
+    }
+    this.shader_valid = false;
+    this.attributes = [];
+    try {
+      var tokens = TokenString(this.properties.code);
+      var ast = ParseTokens(tokens);
+      // console.log(ast);
+      for (let i = 0; i < ast.children.length; i++) {
+        let chld = ast.children[i];
+        // console.log(chld);
+        if (chld.token.data == "attribute") {
+          var type = null;
+          for (let j = 0; j < chld.children[0].children.length; j++) {
+            let chld_1 = chld.children[0].children[j];
+
+            if (chld_1.type == "decllist") {
+              let name = chld_1.children[0].data;
+              // console.log(type + " " + chld_1.children[0].data);
+              this.attributes.push({ name: name, type: type });
+            }
+
+            if (chld_1.token.type == "keyword") {
+              type = chld_1.token.data + "_t";
+            }
+          }
+
+        }
+      }
+      this.shader_valid = true;
+    } catch (e) {
+      console.log(e);
+    }
+    if (this.shader_valid) {
+      for (let i in this.attributes) {
+        this.addAttribute(this.attributes[i].name);
+      }
+    }
+  }
+
+  set_text(v) {
+    this.properties.code = v;
+    this.parse_shader();
+  }
+
+  onSelected() {
+    global_state.selected_pipeline = this;
+    global_state.edit_text(this.properties.code);
+  }
+
+  onDeselected() {
+    global_state.selected_pipeline = null;
   }
 
   addAttribute(name) {
@@ -102,7 +270,7 @@ class PassNode extends LGraphNode {
 class GraphNodeComponent extends React.Component {
   constructor(props, context) {
     super(props, context);
-    this.graph = new LGraph();
+    this.graph = global_state.litegraph;
     this.canvas = null;
     this.onResize = this.onResize.bind(this);
     this.dumpJson = this.dumpJson.bind(this);
@@ -172,6 +340,7 @@ class GraphNodeComponent extends React.Component {
     LiteGraph.registerNodeType("gfx/test", PassNode);
     LiteGraph.registerNodeType("gfx/BackBufferNode", BackBufferNode);
     LiteGraph.registerNodeType("gfx/DrawCallNode", DrawCallNode);
+    // this.graph.config.shaders = { "simple_vs": "#version 300 es\nprecision mediump float;\nattribute vec2 position;\nattribute vec3 normal;\nvarying vec2 uv;\nvoid main() {\n  uv = 0.5 * (position + 1.0);\n  gl_Position = vec4(position, 0, 1);\n}" };
     this.dumpJson();
   }
 
@@ -214,56 +383,60 @@ class TextEditorComponent extends React.Component {
 
     this.onChange = this.onChange.bind(this);
     this.Execute = this.Execute.bind(this);
-    this.PauseResume = this.PauseResume.bind(this);
     this.onResize = this.onResize.bind(this);
     this.setText = this.setText.bind(this);
-    this.setClocks = this.setClocks.bind(this);
     this.state = { clocks: 0 };
-
+    global_state.edit_text = (t) => { this.setText(t); };
   }
 
   componentDidMount() {
-    // this.refs.editor.setValue(
-    //     "ret"
-    // );
     this.props.glContainer.on('resize', this.onResize);
-    // this.props.globals().setText = this.setText;
-    // this.props.globals().setClocks = this.setClocks;
+    var text = {
+      message: 'dat.gui',
+      speed: 0.8,
+      displayOutline: false,
+    };
+
+    var gui = new dat.GUI({ autoPlace: false });
+    gui.add(text, 'message');
+    gui.add(text, 'speed', -5, 5);
+    gui.add(text, 'displayOutline');
+    // gui.add(global_state.litegraph, 'shaders');
+    
+
+    var customContainer = document.getElementById('teditor_gui_container');
+    customContainer.appendChild(gui.domElement);
   }
 
   onChange(newValue) {
     this.text = newValue;
+    global_state.set_text(newValue);
   }
 
   onResize() {
     this.refs.editor.editor.resize();
   }
 
-  PauseResume() {
-    if (this.props.globals().wasm) {
-      this.props.globals().run = !this.props.globals().run;
-    }
-  }
   setClocks(clocks) {
     this.setState({ clocks: clocks });
   }
+
   setText(text) {
     this.refs.editor.editor.setValue(text);
   }
 
   Execute() {
-    let globals = this.props.globals();
 
   }
   render() {
 
     return (
       <div className="ace_editor_container">
-
+        <div id="teditor_gui_container"></div>
         <AceEditor
           value={this.text}
           ref="editor"
-          mode="assembly_x86"
+          mode="glsl"
           theme="tomorrow_night_eighties"
           onChange={this.onChange}
           name="UNIQUE_ID_OF_DIV"
@@ -323,7 +496,7 @@ class GoldenLayoutWrapper extends React.Component {
   }
 
   componentDidMount() {
-
+    this.globals = {};
     // Build basic golden-layout config
     const config = {
       content: [{
@@ -391,8 +564,7 @@ class GoldenLayoutWrapper extends React.Component {
     window.addEventListener('resize', () => {
       layout.updateSize();
     });
-    var TokenString = require('glsl-tokenizer/string');
-    var ParseTokens = require('glsl-parser/direct');
+
     // var reader = new FileReader();
 
     // reader.onload = function (theFile) {
@@ -402,14 +574,14 @@ class GoldenLayoutWrapper extends React.Component {
     // reader.readAsDataURL('test.glsl');
 
 
-    fetch('shaders/test.glsl')
-      .then(response => response.text())
-      .then(text => {
-        console.log(text);
-        var tokens = TokenString(text);
-        var ast = ParseTokens(tokens);
-        console.log(ast);
-      });
+    // fetch('shaders/test.glsl')
+    //   .then(response => response.text())
+    //   .then(text => {
+    //     console.log(text);
+    //     var tokens = TokenString(text);
+    //     var ast = ParseTokens(tokens);
+    //     console.log(ast);
+    //   });
 
   }
 

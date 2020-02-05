@@ -30,7 +30,15 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import { RoughnessMipmapper } from 'three/examples/jsm/utils/RoughnessMipmapper.js';
 import * as dat from 'dat.gui';
-
+function assert(condition) {
+  if (!condition) {
+      var message = "Assertion failed";
+      if (typeof Error !== "undefined") {
+          throw new Error(message);
+      }
+      throw message; // Fallback
+  }
+}
 
 class GLComponent extends React.Component {
   constructor(props, context) {
@@ -42,9 +50,13 @@ class GLComponent extends React.Component {
 
   componentDidMount() {
     var canvas = document.getElementById("myglcanvas");
-    // var context = canvas.getContext('webgl2', { alpha: false });
+    // var gl = canvas.getContext('webgl2', { alpha: false });
+    // console.log(gl.getSupportedExtensions());
+    // assert(gl.getExtension('OES_texture_float') != null);
+    // assert(gl.getExtension('webgl_draw_buffers') != null);
     var regl = require('regl')({
       canvas: canvas,
+      // gl: gl,
       extensions: ['webgl_draw_buffers', 'oes_texture_float']
     })
 

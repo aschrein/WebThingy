@@ -1,1 +1,341 @@
-{"last_node_id":7,"last_link_id":5,"nodes":[{"id":1,"type":"basic/const","pos":[200,200],"size":{"0":140,"1":26},"flags":{},"order":0,"mode":0,"outputs":[{"name":"value","type":"number","links":[],"label":"4.500"}],"properties":{"value":4.5}},{"id":2,"type":"basic/watch","pos":[721,142],"size":{"0":140,"1":26},"flags":{},"order":3,"mode":0,"inputs":[{"name":"value","type":0,"link":3,"label":"0.000"}],"properties":{}},{"id":4,"type":"graphics/image","pos":[387,49],"size":{"0":218,"1":179},"flags":{},"order":1,"mode":0,"outputs":[{"name":"frame","type":"image","links":[3,4]}],"properties":{"url":"https://avatars1.githubusercontent.com/u/33158085?s=460&v=4"},"boxcolor":"#9F9"},{"id":5,"type":"graphics/frame","pos":[647,278],"size":[251,229],"flags":{},"order":4,"mode":0,"inputs":[{"name":"","type":"image,canvas","link":4}],"properties":{}},{"id":7,"type":"gfx/BackBufferNode","pos":{"0":582,"1":631,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0},"size":{"0":148,"1":33},"flags":{},"order":5,"mode":0,"inputs":[{"name":"in","type":"texture_t","link":5}],"outputs":[],"title":"Back Buffer Node","properties":{}},{"id":6,"type":"gfx/test","pos":{"0":237,"1":442,"2":0,"3":0,"4":0,"5":0,"6":0,"7":0,"8":0,"9":0},"size":{"0":210,"1":182},"flags":{},"order":2,"mode":0,"inputs":[{"name":"in#0","type":"texture","link":null},{"name":"in#0","type":"vec4_t","link":null},{"name":"DC#0","type":"drawcall_t","link":null},{"name":"DC#1","type":"drawcall_t","link":null},{"name":"DC#2","type":"drawcall_t","link":null},{"name":"DC#3","type":"drawcall_t","link":null}],"outputs":[{"name":"out#0","type":"texture_t","links":[5]}],"title":"Pass Node","properties":{"dc_cnt":4}}],"links":[[3,4,0,2,0,0],[4,4,0,5,0,"image,canvas"],[5,6,0,7,0,"texture_t"]],"groups":[],"config":{},"version":0.4}
+{
+  "last_node_id": 9,
+  "last_link_id": 6,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "basic/const",
+      "pos": [
+        200,
+        200
+      ],
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "value",
+          "type": "number",
+          "links": [],
+          "label": "4.500"
+        }
+      ],
+      "properties": {
+        "value": 4.5
+      }
+    },
+    {
+      "id": 2,
+      "type": "basic/watch",
+      "pos": [
+        721,
+        142
+      ],
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "value",
+          "type": 0,
+          "link": 3,
+          "label": "0.000"
+        }
+      ],
+      "properties": {}
+    },
+    {
+      "id": 4,
+      "type": "graphics/image",
+      "pos": [
+        387,
+        49
+      ],
+      "size": {
+        "0": 218,
+        "1": 179
+      },
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "outputs": [
+        {
+          "name": "frame",
+          "type": "image",
+          "links": [
+            3,
+            4
+          ]
+        }
+      ],
+      "properties": {
+        "url": "https://avatars1.githubusercontent.com/u/33158085?s=460&v=4"
+      },
+      "boxcolor": "#9F9"
+    },
+    {
+      "id": 5,
+      "type": "graphics/frame",
+      "pos": [
+        647,
+        278
+      ],
+      "size": [
+        251,
+        229
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "",
+          "type": "image,canvas",
+          "link": 4
+        }
+      ],
+      "properties": {}
+    },
+    {
+      "id": 7,
+      "type": "gfx/BackBufferNode",
+      "pos": {
+        "0": 582,
+        "1": 631,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 148,
+        "1": 33
+      },
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "in",
+          "type": "texture_t",
+          "link": 5
+        }
+      ],
+      "outputs": [],
+      "title": "Back Buffer Node",
+      "properties": {}
+    },
+    {
+      "id": 6,
+      "type": "gfx/test",
+      "pos": {
+        "0": 237,
+        "1": 442,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 210,
+        "1": 182
+      },
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "in#0",
+          "type": "texture",
+          "link": null
+        },
+        {
+          "name": "in#0",
+          "type": "vec4_t",
+          "link": null
+        },
+        {
+          "name": "DC#0",
+          "type": "drawcall_t",
+          "link": 6
+        },
+        {
+          "name": "DC#1",
+          "type": "drawcall_t",
+          "link": null
+        },
+        {
+          "name": "DC#2",
+          "type": "drawcall_t",
+          "link": null
+        },
+        {
+          "name": "DC#3",
+          "type": "drawcall_t",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out#0",
+          "type": "texture_t",
+          "links": [
+            5
+          ]
+        }
+      ],
+      "title": "Pass Node",
+      "properties": {
+        "dc_cnt": 4
+      }
+    },
+    {
+      "id": 8,
+      "type": "gfx/DrawCallNode",
+      "pos": {
+        "0": 78,
+        "1": 260,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 210,
+        "1": 82
+      },
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "position",
+          "type": "attribute_t",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "drawcall_t",
+          "links": null
+        }
+      ],
+      "title": "Draw Call Node",
+      "properties": {
+        "code": "#version 300 es\nprecision mediump float;\nattribute vec2 position;\nvarying vec2 uv;\nvoid main() {\n  uv = 0.5 * (position + 1.0);\n  gl_Position = vec4(position, 0, 1);\n}"
+      }
+    },
+    {
+      "id": 9,
+      "type": "gfx/DrawCallNode",
+      "pos": {
+        "0": -143,
+        "1": 532,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 210,
+        "1": 102
+      },
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "position",
+          "type": "attribute_t",
+          "link": null
+        },
+        {
+          "name": "normal",
+          "type": "attribute_t",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "drawcall_t",
+          "links": [
+            6
+          ]
+        }
+      ],
+      "title": "Draw Call Node",
+      "properties": {
+        "code": "#version 300 es\nprecision mediump float;\nattribute vec2 position;\nattribute vec3 normal;\nvarying vec2 uv;\nvoid main() {\n  uv = 0.5 * (position + 1.0);\n  gl_Position = vec4(position, 0, 1);\n}"
+      }
+    }
+  ],
+  "links": [
+    [
+      3,
+      4,
+      0,
+      2,
+      0,
+      0
+    ],
+    [
+      4,
+      4,
+      0,
+      5,
+      0,
+      "image,canvas"
+    ],
+    [
+      5,
+      6,
+      0,
+      7,
+      0,
+      "texture_t"
+    ],
+    [
+      6,
+      9,
+      0,
+      6,
+      2,
+      "drawcall_t"
+    ]
+  ],
+  "groups": [],
+  "config": {
+    "shaders": {
+      "simple_vs": {
+        "code": "#version 300 es\nprecision mediump float;\nattribute vec2 position;\nattribute vec3 normal;\nvarying vec2 uv;\nvoid main() {\n  uv = 0.5 * (position + 1.0);\n  gl_Position = vec4(position, 0, 1);\n}"
+      }
+    }
+  },
+  "version": 0.4
+}
