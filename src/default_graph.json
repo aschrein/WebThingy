@@ -77,7 +77,7 @@
         }
       ],
       "properties": {
-        "url": "https://avatars1.githubusercontent.com/u/33158085?s=460&v=4"
+        "url": "textures/disturb.jpg"
       },
       "boxcolor": "#9F9"
     },
@@ -332,7 +332,7 @@
   "groups": [],
   "config": {
     "shaders": {
-      "simple_vs": {
+      "simple.vs.glsl": {
         "code": "#version 300 es\nprecision mediump float;\nattribute vec2 position;\nattribute vec3 normal;\nvarying vec2 uv;\nvoid main() {\n  uv = 0.5 * (position + 1.0);\n  gl_Position = vec4(position, 0, 1);\n}"
       }
     }

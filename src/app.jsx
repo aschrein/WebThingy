@@ -12,6 +12,10 @@ import { JSONEditor } from 'react-json-editor-viewer';
 import { LGraph, LGraphCanvas, LiteGraph, LGraphNode } from 'litegraph.js';
 import GLComponent from './glnodes';
 import * as dat from 'dat.gui';
+// import {Button, useState} from 'react';
+import 'bootstrap/dist/css/bootstrap.min.css';
+import { Modal, Button, FormControl } from 'react-bootstrap';
+
 var TokenString = require('glsl-tokenizer/string');
 var ParseTokens = require('glsl-parser/direct');
 
@@ -27,7 +31,14 @@ global_state.set_text = (v) => {
 // Reference to the litegraph instance
 global_state.litegraph = new LGraph();
 // A list of subscribers to notify when graph is loaded
-global_state.on_graph_loaded = [];
+// global_state.on_graph_loaded = [];
+function init_litegraph(json) {
+  global_state.litegraph.clear();
+  // setTimeout(function () {
+  global_state.litegraph.configure(json, false);
+  // }, 1000);
+}
+init_litegraph(require('./default_graph.json'));
 
 // TODO:
 // * shader node/pipeline node
@@ -41,7 +52,6 @@ global_state.on_graph_loaded = [];
 //   * multiple drawcalls as inputs
 //   * multiple output render targets
 //   * live view render targets(configure custom visualization shader)
-
 
 class BackBufferNode extends LGraphNode {
   constructor() {
@@ -351,15 +361,7 @@ class GraphNodeComponent extends React.Component {
   dumpJson() {
     var json = this.graph.serialize();
     console.log(JSON.stringify(json));
-    // var data = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(json));
 
-    json = require('./default_graph.json');
-
-    var graph = this.graph;
-    graph.clear();
-    setTimeout(function () {
-      graph.configure(json, false);
-    }, 1000);
 
   }
 
@@ -372,6 +374,47 @@ class GraphNodeComponent extends React.Component {
                 </button>
         <canvas id='mycanvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
       </div>
+    );
+  }
+}
+
+class CreateShader extends React.Component {
+  constructor(props, context) {
+    super(props, context);
+    this.state = { visible: false };
+    this.myInput = { value: "" };
+  }
+  setShow = (vis) => {
+    this.setState({ visible: vis });
+  }
+  handleClose = () => this.setShow(false);
+  handleShow = () => this.setShow(true);
+  handleApply = () => {
+    console.log(this.myInput.value);
+    this.setShow(false);
+  }
+  render() {
+    return (
+      <>
+        <Button variant="primary" onClick={this.handleShow}>
+          New shader
+      </Button>
+
+        <Modal show={this.state.visible} onHide={this.handleClose}>
+          <Modal.Header closeButton>
+            <Modal.Title>Enter name</Modal.Title>
+          </Modal.Header>
+          <FormControl type="text" placeholder="shader name" onChange={e => this.myInput.value = e.target.value} />
+          <Modal.Footer>
+            <Button variant="secondary" onClick={this.handleClose}>
+              Close
+          </Button>
+            <Button variant="primary" onClick={() => this.handleApply()}>
+              Create
+          </Button>
+          </Modal.Footer>
+        </Modal>
+      </>
     );
   }
 }
@@ -395,14 +438,25 @@ class TextEditorComponent extends React.Component {
       message: 'dat.gui',
       speed: 0.8,
       displayOutline: false,
+      shader: 'simple.vs.glsl',
+      name: 'dummy.vs.glsl',
+      add_shader: () => { console.log("add shader") },
+      remove_shader: () => { console.log("remove shader") },
     };
 
     var gui = new dat.GUI({ autoPlace: false });
-    gui.add(text, 'message');
-    gui.add(text, 'speed', -5, 5);
-    gui.add(text, 'displayOutline');
-    // gui.add(global_state.litegraph, 'shaders');
-    
+    // gui.add(text, 'message');
+    // gui.add(text, 'speed', -5, 5);
+    // gui.add(text, 'displayOutline');
+    gui.add(text, 'shader', ['simple.vs.glsl', 'simple.ps.glsl']);
+    gui.add(text, 'name');
+    gui.add(text, 'add_shader');
+    gui.add(text, 'remove_shader');
+    var gui_state = {
+      shaders: [1, 2, "off"],//global_state.litegraph.config.shaders
+    };
+    // gui.add(gui_state, 'shaders');
+
 
     var customContainer = document.getElementById('teditor_gui_container');
     customContainer.appendChild(gui.domElement);
@@ -432,7 +486,9 @@ class TextEditorComponent extends React.Component {
 
     return (
       <div className="ace_editor_container">
-        <div id="teditor_gui_container"></div>
+        <div id="teditor_gui_container">
+          <CreateShader />
+        </div>
         <AceEditor
           value={this.text}
           ref="editor"

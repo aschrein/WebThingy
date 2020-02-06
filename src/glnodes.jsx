@@ -49,6 +49,7 @@ class GLComponent extends React.Component {
   }
 
   componentDidMount() {
+    return;
     var canvas = document.getElementById("myglcanvas");
     // var gl = canvas.getContext('webgl2', { alpha: false });
     // console.log(gl.getSupportedExtensions());
