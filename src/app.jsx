@@ -19,15 +19,25 @@ import { Modal, Button, FormControl } from 'react-bootstrap';
 var TokenString = require('glsl-tokenizer/string');
 var ParseTokens = require('glsl-parser/direct');
 
+function assert(condition) {
+  if (!condition) {
+    var message = "Assertion failed";
+    if (typeof Error !== "undefined") {
+      throw new Error(message);
+    }
+    throw message; // Fallback
+  }
+}
+
 // Actually, lets make a global state object
 let global_state = {};
-// Injected by text editor. edit_text(text) sends text to the editor
-global_state.edit_text = null;
-// Reference to the selected draw call
-global_state.selected_pipeline = null;
-global_state.set_text = (v) => {
-  if (global_state.selected_pipeline) global_state.selected_pipeline.set_text(v);
-};
+// // Injected by text editor. edit_text(text) sends text to the editor
+// global_state.edit_text = null;
+// // Reference to the selected draw call
+// global_state.selected_pipeline = null;
+// global_state.set_text = (v) => {
+//   if (global_state.selected_pipeline) global_state.selected_pipeline.set_text(v);
+// };
 // Reference to the litegraph instance
 global_state.litegraph = new LGraph();
 // A list of subscribers to notify when graph is loaded
@@ -378,6 +388,8 @@ class GraphNodeComponent extends React.Component {
   }
 }
 
+// A button that spawns a modal window with text input and submit button
+// @TODO: validation
 class CreateShader extends React.Component {
   constructor(props, context) {
     super(props, context);
@@ -390,7 +402,8 @@ class CreateShader extends React.Component {
   handleClose = () => this.setShow(false);
   handleShow = () => this.setShow(true);
   handleApply = () => {
-    console.log(this.myInput.value);
+    // console.log(this.myInput.value);
+    this.props.on_submit(this.myInput.value);
     this.setShow(false);
   }
   render() {
@@ -407,7 +420,7 @@ class CreateShader extends React.Component {
           <FormControl type="text" placeholder="shader name" onChange={e => this.myInput.value = e.target.value} />
           <Modal.Footer>
             <Button variant="secondary" onClick={this.handleClose}>
-              Close
+              Cancel
           </Button>
             <Button variant="primary" onClick={() => this.handleApply()}>
               Create
@@ -425,69 +438,101 @@ class TextEditorComponent extends React.Component {
     super(props, context);
 
     this.onChange = this.onChange.bind(this);
-    this.Execute = this.Execute.bind(this);
+    // this.Execute = this.Execute.bind(this);
     this.onResize = this.onResize.bind(this);
-    this.setText = this.setText.bind(this);
-    this.state = { clocks: 0 };
-    global_state.edit_text = (t) => { this.setText(t); };
+    // this.setText = this.setText.bind(this);
+    // this.state = { clocks: 0 };
+    // global_state.edit_text = (t) => { this.setText(t); };
+    this.selected_shader = null;
+  }
+
+  rebuildGui = () => {
+    this.datgui = new dat.GUI({ autoPlace: false });
+    this.shader_list = [];
+    this.datgui_state = {
+      select_shader: this.selected_shader,
+      remove_shader: () => { this.removeShader(); },
+    };
+    Object.keys(global_state.litegraph.config.shaders).forEach(e => this.shader_list.push(e));
+    this.datgui.shader_list = this.datgui.add(this.datgui_state, 'select_shader', this.shader_list)
+      .onChange((v) => this.editShader(v));
+    this.datgui.add(this.datgui_state, 'remove_shader');
+
+    var customContainer = document.getElementById('teditor_gui_container');
+    var child = customContainer.lastElementChild;
+    while (child) {
+      customContainer.removeChild(child);
+      child = customContainer.lastElementChild;
+    }
+    customContainer.appendChild(this.datgui.domElement);
   }
 
   componentDidMount() {
     this.props.glContainer.on('resize', this.onResize);
-    var text = {
-      message: 'dat.gui',
-      speed: 0.8,
-      displayOutline: false,
-      shader: 'simple.vs.glsl',
-      name: 'dummy.vs.glsl',
-      add_shader: () => { console.log("add shader") },
-      remove_shader: () => { console.log("remove shader") },
-    };
+    this.editShader(null);
+    this.rebuildGui();
+  }
 
-    var gui = new dat.GUI({ autoPlace: false });
-    // gui.add(text, 'message');
-    // gui.add(text, 'speed', -5, 5);
-    // gui.add(text, 'displayOutline');
-    gui.add(text, 'shader', ['simple.vs.glsl', 'simple.ps.glsl']);
-    gui.add(text, 'name');
-    gui.add(text, 'add_shader');
-    gui.add(text, 'remove_shader');
-    var gui_state = {
-      shaders: [1, 2, "off"],//global_state.litegraph.config.shaders
-    };
-    // gui.add(gui_state, 'shaders');
+  editShader = (name) => {
+    if (name == null) {
+      this.selected_shader = null;
+      this.refs.editor.editor.setValue("");
+      return;
+    }
+    assert(name in global_state.litegraph.config.shaders);
+    this.selected_shader = name;
+    this.refs.editor.editor.setValue(global_state.litegraph.config.shaders[name].code);
+  }
 
+  addShader = (name) => {
+    assert(!(name in global_state.litegraph.config.shaders));
+    global_state.litegraph.config.shaders[name] = { code: "" };
+    // this.datgui.shader_list = this.datgui.shader_list.options(this.shader_list)
+    //   .onChange((v) => this.editShader(v));
+    this.editShader(name);
+    this.rebuildGui();
+    
+  }
 
-    var customContainer = document.getElementById('teditor_gui_container');
-    customContainer.appendChild(gui.domElement);
+  removeShader = () => {
+    if (this.selected_shader == null)
+      return;
+    assert(this.selected_shader in global_state.litegraph.config.shaders);
+    delete global_state.litegraph.config.shaders[this.selected_shader];
+    this.editShader(null);
+    this.rebuildGui();
   }
 
   onChange(newValue) {
-    this.text = newValue;
-    global_state.set_text(newValue);
+    if (this.selected_shader == null)
+      return;
+    // console.log(this.current_shader + " has changed to " + newValue);
+    global_state.litegraph.config.shaders[this.selected_shader].code = newValue;
   }
 
   onResize() {
     this.refs.editor.editor.resize();
   }
 
-  setClocks(clocks) {
-    this.setState({ clocks: clocks });
-  }
+  // setClocks(clocks) {
+  //   this.setState({ clocks: clocks });
+  // }
 
-  setText(text) {
-    this.refs.editor.editor.setValue(text);
-  }
+  // setText(text) {
+  //   this.refs.editor.editor.setValue(text);
+  // }
 
-  Execute() {
+  // Execute() {
 
-  }
+  // }
+
   render() {
 
     return (
       <div className="ace_editor_container">
+        <CreateShader on_submit={(name) => this.addShader(name)} />
         <div id="teditor_gui_container">
-          <CreateShader />
+          
         </div>
         <AceEditor
           value={this.text}
