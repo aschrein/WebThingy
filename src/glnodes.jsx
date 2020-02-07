@@ -32,11 +32,11 @@ import { RoughnessMipmapper } from 'three/examples/jsm/utils/RoughnessMipmapper.
 import * as dat from 'dat.gui';
 function assert(condition) {
   if (!condition) {
-      var message = "Assertion failed";
-      if (typeof Error !== "undefined") {
-          throw new Error(message);
-      }
-      throw message; // Fallback
+    var message = "Assertion failed";
+    if (typeof Error !== "undefined") {
+      throw new Error(message);
+    }
+    throw message; // Fallback
   }
 }
 
@@ -49,6 +49,155 @@ class GLComponent extends React.Component {
   }
 
   componentDidMount() {
+    var canvas = document.getElementById("myglcanvas");
+    var gl = canvas.getContext('webgl2', { alpha: false });
+    var pipeline = {
+      vs:
+        `#version 300 es
+        
+        layout (location=0) in vec4 position;
+        layout (location=1) in vec3 color;
+        
+        out vec3 vColor;
+
+        void main() {
+
+            vColor = color;
+            gl_Position = position;
+        }
+        `,
+      ps:
+        `#version 300 es
+        precision highp float;
+        in vec3 vColor;
+        out vec4 fragColor;
+
+        void main() {
+            fragColor = vec4(vColor, 1.0);
+        }`,
+
+    };
+    gl.clearColor(0, 0, 1, 1);
+    var vsSource = pipeline.vs;
+    var fsSource = pipeline.ps;
+
+    var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vertexShader, vsSource);
+    gl.compileShader(vertexShader);
+
+    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(vertexShader));
+    }
+
+    var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fragmentShader, fsSource);
+    gl.compileShader(fragmentShader);
+
+    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(fragmentShader));
+    }
+
+    var program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.error(gl.getProgramInfoLog(program));
+    }
+
+    gl.useProgram(program);
+
+    /////////////////////
+    // SET UP GEOMETRY
+    /////////////////////
+
+    var triangleArray = gl.createVertexArray();
+    gl.bindVertexArray(triangleArray);
+
+    var positions = new Float32Array([
+      -0.5, -0.5, 0.0,
+      0.5, -0.5, 0.0,
+      0.0, 0.5, 0.0
+    ]);
+
+    var positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(0);
+
+    var colors = new Float32Array([
+      1.0, 0.0, 0.0,
+      0.0, 1.0, 0.0,
+      0.0, 0.0, 1.0
+    ]);
+
+    var colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+    gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(1);
+
+    ////////////////
+    // DRAW
+    ////////////////
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  componentDidMount_fe() {
+    var canvas = document.getElementById("myglcanvas");
+    var regl = require('regl')({
+      canvas: canvas,
+      // gl: gl,
+      extensions: ['webgl_draw_buffers', 'oes_texture_float']
+    })
+
+    // This clears the color buffer to black and the depth buffer to 1
+    regl.clear({
+      color: [0, 0, 0, 1],
+      depth: 1
+    })
+
+    // In regl, draw operations are specified declaratively using. Each JSON
+    // command is a complete description of all state. This removes the need to
+    // .bind() things like buffers or shaders. All the boilerplate of setting up
+    // and tearing down state is automated.
+    regl({
+
+      // In a draw call, we can pass the shader source code to regl
+      frag: `
+  precision mediump float;
+  uniform vec4 color;
+  void main () {
+    gl_FragColor = color;
+  }`,
+
+      vert: `
+  precision mediump float;
+  attribute vec2 position;
+  void main () {
+    gl_Position = vec4(position, 0, 1);
+  }`,
+
+      attributes: {
+        position: [
+          [-1, 0],
+          [0, -1],
+          [1, 1]
+        ]
+      },
+
+      uniforms: {
+        color: [1, 0, 0, 1]
+      },
+
+      count: 3
+    })()
+  }
+
+  componentDidMount9() {
     return;
     var canvas = document.getElementById("myglcanvas");
     // var gl = canvas.getContext('webgl2', { alpha: false });
@@ -519,7 +668,7 @@ class GLComponent extends React.Component {
         // myCanvasContext.putImageData(image, 0, 0);
         // // myCanvasContext.drawImage(img, 0, 0); // Draw the texture
         // console.log(result);
-        
+
       }
     })
 
@@ -712,7 +861,7 @@ class GLComponent extends React.Component {
     renderer.render(scene, camera);
 
 
-    
+
 
   }
 
