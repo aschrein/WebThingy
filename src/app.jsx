@@ -361,7 +361,63 @@ global_state.get_texture_data = (tex) => {
   let array = new Uint8ClampedArray(data);
   let image = new ImageData(array, targetTextureWidth, targetTextureHeight);
   return image;
-}
+};
+global_state._dirty_set = new Set();
+global_state.set_dirty = (node) => {
+  // console.log(node + " is dirty!");
+  global_state._dirty_set.add(node);
+};
+global_state.update = () => {
+  let set_to_check = new Set(global_state._dirty_set);
+  while (true) {
+    let new_set = new Set();
+    set_to_check.forEach(node => {
+      node.outputs.forEach(output => {
+        if (!output.links)
+          return;
+        output.links.forEach(link_id => {
+          let link = global_state.litegraph.links[link_id];
+          // console.log("visiting link: " + link);
+          let target = global_state.litegraph.getNodeById(link.target_id);
+          if (target && !global_state._dirty_set.has(target)) {
+            global_state._dirty_set.add(target);
+            new_set.add(target);
+          }
+        });
+
+
+      });
+    });
+    if (new_set.size == 0)
+      break;
+    set_to_check = new_set;
+  }
+  // console.log(global_state._dirty_set);
+  let sorted_list = [];
+  let backlog = new Set();
+  while (true) {
+    let to_remove = new Set();
+    global_state._dirty_set.forEach(node => {
+      let has_dirty_input = false;
+      node.inputs.forEach(input => {
+        if (input.link) {
+          var input_node = global_state.litegraph.getNodeById(input.link.input_id);
+          if (global_state._dirty_set.has(input_node))
+            has_dirty_input = true;
+        }
+      });
+      if (!has_dirty_input) {
+        backlog.add(node);
+        sorted_list.push(node);
+      }
+    });
+    backlog.forEach(node => global_state._dirty_set.delete(node));
+    backlog.clear();
+    if (global_state._dirty_set.size == 0)
+      break;
+  }
+  sorted_list.forEach(node => { if (node.update) node.update(); });
+};
 
 // TODO:
 // * src node/pipeline node
@@ -379,10 +435,8 @@ global_state.get_texture_data = (tex) => {
 class MyLGraphNode extends LGraphNode {
   constructor() {
     super();
-    this.dirty  = true;
   }
-  setDirty = (flag) => {this.dirty = flag;}
-  isDirty = () => {return this.dirty};
+  set_dirty = () => { global_state.set_dirty(this); }
 }
 
 class GLComponent extends React.Component {
@@ -460,9 +514,12 @@ class PipelineNode extends MyLGraphNode {
       }
     });
     global_state.on_src_change((src_name) => {
-      if (src_name == this.vs) {
+      // console.log("pipeline has received an update on " + src_name);
+      if (src_name == this.properties.vs) {
+        this.set_dirty();
       }
-      if (src_name == this.ps) {
+      if (src_name == this.properties.ps) {
+        this.set_dirty();
       }
     });
   }
@@ -559,6 +616,10 @@ class PipelineNode extends MyLGraphNode {
       .onChange((v) => this.set_ps(v));
   }
 
+  update = () => {
+
+  }
+
   parse_shaders() {
     this.clean_inputs();
     this.attributes = [];
@@ -614,6 +675,10 @@ class DrawCallNode extends MyLGraphNode {
       return;
     let attributes = pipeline.parse_shaders();
     attributes.forEach(k => this.addInput(k.name, "attribute_t"));
+  }
+
+  update = () => {
+    this.update_inputs();
   }
 
   onSelected() {
@@ -1021,6 +1086,9 @@ class GraphNodeComponent extends React.Component {
                 </Button>
         <Button style={{ margin: 10 }} onClick={() => { global_state.exec_reset(); }}>
           clear graph
+                </Button>
+        <Button style={{ margin: 10 }} onClick={() => { global_state.update(); }}>
+          force update
                 </Button>
         <canvas id='tmp_canvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
       </div>
