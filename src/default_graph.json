@@ -1,13 +1,48 @@
 {
-  "last_node_id": 2,
-  "last_link_id": 0,
+  "last_node_id": 3,
+  "last_link_id": 1,
   "nodes": [
+    {
+      "id": 3,
+      "type": "gfx/DrawCallNode",
+      "pos": {
+        "0": 50,
+        "1": 219,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "drawcall_t",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "title": "Draw Call Node",
+      "properties": {}
+    },
     {
       "id": 1,
       "type": "gfx/PipelineNode",
       "pos": {
-        "0": 93,
-        "1": 57,
+        "0": 62,
+        "1": 34,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -42,8 +77,8 @@
       "id": 2,
       "type": "gfx/PassNode",
       "pos": {
-        "0": 281,
-        "1": 233,
+        "0": 409,
+        "1": 173,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -53,14 +88,25 @@
         "8": 0,
         "9": 0
       },
-      "size": [
-        140,
-        60
-      ],
+      "size": {
+        "0": 210,
+        "1": 438
+      },
       "flags": {},
-      "order": 1,
+      "order": 2,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "DC#0",
+          "type": "drawcall_t",
+          "link": 1
+        },
+        {
+          "name": "DC#1",
+          "type": "drawcall_t",
+          "link": null
+        }
+      ],
       "outputs": [],
       "title": "Pass Node",
       "properties": {
@@ -71,18 +117,25 @@
         "rts": [
           {
             "format": "RGBA_F32"
-          },
-          {
-            "format": "RGBA_U8"
-          },
-          {
-            "format": "RGBA_U8"
           }
-        ]
+        ],
+        "depth": {
+          "format": "D32"
+        },
+        "dc_cnt": 2
       }
     }
   ],
-  "links": [],
+  "links": [
+    [
+      1,
+      3,
+      0,
+      2,
+      0,
+      "drawcall_t"
+    ]
+  ],
   "groups": [],
   "config": {
     "srcs": {

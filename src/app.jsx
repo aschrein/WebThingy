@@ -113,6 +113,232 @@ global_state.get_src = (name) => {
   assert(name in global_state.litegraph.config.srcs);
   return global_state.litegraph.config.srcs[name].code;
 };
+global_state.draw_triangle = (gl) => {
+  var pipeline = {
+    vs:
+      `#version 300 es
+      
+      layout (location=0) in vec4 position;
+      layout (location=1) in vec3 color;
+      
+      out vec3 vColor;
+
+      void main() {
+
+          vColor = color;
+          gl_Position = position;
+      }
+      `,
+    ps:
+      `#version 300 es
+      precision highp float;
+      in vec3 vColor;
+      out vec4 fragColor;
+
+      void main() {
+          fragColor = vec4(vColor, 1.0);
+      }`,
+
+  };
+  var vsSource = pipeline.vs;
+  var fsSource = pipeline.ps;
+
+  var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vertexShader, vsSource);
+  gl.compileShader(vertexShader);
+
+  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(vertexShader));
+  }
+
+  var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fragmentShader, fsSource);
+  gl.compileShader(fragmentShader);
+
+  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(fragmentShader));
+  }
+
+  var program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(program));
+  }
+
+  gl.useProgram(program);
+
+  var triangleArray = gl.createVertexArray();
+  gl.bindVertexArray(triangleArray);
+
+  var positions = new Float32Array([
+    -0.5, -0.5, 0.0,
+    0.5, -0.5, 0.0,
+    0.0, 0.5, 0.0
+  ]);
+
+  var positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(0);
+
+  var colors = new Float32Array([
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0,
+    1.0, 0.0, 0.0
+  ]);
+
+  var colorBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(1);
+
+  gl.enable(gl.CULL_FACE);
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.SCISSOR_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.blendFunc(gl.ONE, gl.ONE);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  gl.deleteBuffer(positionBuffer);
+  gl.deleteBuffer(colorBuffer);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+  gl.deleteProgram(program);
+};
+global_state.get_texture_data = (tex) => {
+  let gl = global_state.gl;
+  // create to render to
+  const targetTextureWidth = 256;
+  const targetTextureHeight = 256;
+  const targetTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, targetTexture);
+
+  {
+    // define size and format of level 0
+    const level = 0;
+    const internalFormat = gl.RGBA;
+    const border = 0;
+    const format = gl.RGBA;
+    const type = gl.UNSIGNED_BYTE;
+    const data = null;
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+      targetTextureWidth, targetTextureHeight, border,
+      format, type, data);
+
+    // set the filtering so we don't need mips
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  // Create and bind the framebuffer
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetTexture, 0);
+
+  var pipeline = {
+    vs:
+      `precision mediump float;
+      attribute vec2 position;
+      varying vec2 uv;
+      void main() {
+        uv = 0.5 * (position + 1.0);
+        uv.y = 1.0 - uv.y;
+        gl_Position = vec4(position, 0, 1);
+      }
+      `,
+    ps:
+      `precision mediump float;
+      varying vec2 uv;
+      uniform sampler2D in_tex;
+      void main() {
+        gl_FragColor = vec4(texture2D(in_tex, uv).xyz, 1.0);
+      }`,
+
+  };
+  var vsSource = pipeline.vs;
+  var fsSource = pipeline.ps;
+
+  var vertexShader = gl.createShader(gl.VERTEX_SHADER);
+  gl.shaderSource(vertexShader, vsSource);
+  gl.compileShader(vertexShader);
+
+  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(vertexShader));
+  }
+
+  var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+  gl.shaderSource(fragmentShader, fsSource);
+  gl.compileShader(fragmentShader);
+
+  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(fragmentShader));
+  }
+
+  var program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(program));
+  }
+
+  gl.useProgram(program);
+
+  var triangleArray = gl.createVertexArray();
+  gl.bindVertexArray(triangleArray);
+
+  var positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-4, -4, 4, -4, 0, 4]), gl.STATIC_DRAW);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(0);
+
+  gl.disable(gl.CULL_FACE);
+  gl.disable(gl.DEPTH_TEST);
+  gl.disable(gl.DEPTH_TEST);
+  gl.disable(gl.SCISSOR_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.blendFunc(gl.ONE, gl.ONE);
+
+
+  gl.activeTexture(gl.TEXTURE0 + 0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(gl.getUniformLocation(program, "in_tex"), 0);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+  gl.viewport(0, 0, targetTextureWidth, targetTextureHeight);
+  gl.clearColor(0, 0, 1, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  var data = new Uint8Array(targetTextureWidth * targetTextureHeight * 4);
+  gl.readPixels(0, 0, targetTextureWidth, targetTextureHeight, gl.RGBA, gl.UNSIGNED_BYTE, data);
+
+
+  gl.deleteBuffer(positionBuffer);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+  gl.deleteProgram(program);
+  gl.deleteFramebuffer(fb);
+  gl.deleteTexture(targetTexture);
+
+  gl.deleteVertexArray(triangleArray);
+  let array = new Uint8ClampedArray(data);
+  let image = new ImageData(array, targetTextureWidth, targetTextureHeight);
+  return image;
+}
+
 // TODO:
 // * src node/pipeline node
 // * drawcall node
@@ -137,112 +363,13 @@ class GLComponent extends React.Component {
   componentDidMount() {
     this.canvas = document.getElementById("myglcanvas");
     this.gl = this.canvas.getContext('webgl2', { alpha: false });
-    return;
+
+    // return;
     let gl = this.gl;
+    assert(gl.getExtension('EXT_color_buffer_float') != null);
     let canvas = this.canvas;
-    var pipeline = {
-      vs:
-        `#version 300 es
-        
-        layout (location=0) in vec4 position;
-        layout (location=1) in vec3 color;
-        
-        out vec3 vColor;
-
-        void main() {
-
-            vColor = color;
-            gl_Position = position;
-        }
-        `,
-      ps:
-        `#version 300 es
-        precision highp float;
-        in vec3 vColor;
-        out vec4 fragColor;
-
-        void main() {
-            fragColor = vec4(vColor, 1.0);
-        }`,
-
-    };
-    gl.clearColor(0, 0, 1, 1);
-    var vsSource = pipeline.vs;
-    var fsSource = pipeline.ps;
-
-    var vertexShader = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vertexShader, vsSource);
-    gl.compileShader(vertexShader);
-
-    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-      console.error(gl.getShaderInfoLog(vertexShader));
-    }
-
-    var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fragmentShader, fsSource);
-    gl.compileShader(fragmentShader);
-
-    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-      console.error(gl.getShaderInfoLog(fragmentShader));
-    }
-
-    var program = gl.createProgram();
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error(gl.getProgramInfoLog(program));
-    }
-
-    gl.useProgram(program);
-
-    var triangleArray = gl.createVertexArray();
-    gl.bindVertexArray(triangleArray);
-
-    var positions = new Float32Array([
-      -0.5, -0.5, 0.0,
-      0.5, -0.5, 0.0,
-      0.0, 0.5, 0.0
-    ]);
-
-    var positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(0);
-
-    var colors = new Float32Array([
-      1.0, 0.0, 0.0,
-      0.0, 1.0, 0.0,
-      0.0, 0.0, 1.0
-    ]);
-
-    // var colorBuffer = gl.createBuffer();
-    // gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-    // gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
-    // gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
-    // gl.enableVertexAttribArray(1);
-
-    // gl.clear(gl.COLOR_BUFFER_BIT);
-    // gl.enable(gl.CULL_FACE);
-    // gl.enable(gl.DEPTH_TEST);
-    // gl.enable(gl.SCISSOR_TEST);
-    // gl.depthFunc(gl.LEQUAL);
-    // gl.blendFunc(gl.ONE, gl.ONE);
-    // gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-    // gl.uniform3fv(gl.getUniformLocation(mainProgram, "uTextureMap"), eyePosition);
-    // gl.activeTexture(gl.TEXTURE0);
-    // gl.bindTexture(gl.TEXTURE_2D, positionTarget);
-    // gl.activeTexture(gl.TEXTURE1);
-    // gl.bindTexture(gl.TEXTURE_2D, normalTarget);
-    // gl.activeTexture(gl.TEXTURE2);
-    // gl.bindTexture(gl.TEXTURE_2D, uvTarget);
-    // gl.activeTexture(gl.TEXTURE3);
-    // gl.bindTexture(gl.TEXTURE_2D, colorTexture);
-    // gl.depthMask(true);
-    // gl.disable(gl.BLEND);
+    global_state.gl = gl;
+    global_state.draw_triangle(gl);
   }
 
   exec_graph = () => {
@@ -372,9 +499,9 @@ class PipelineNode extends LGraphNode {
   release = (gl) => {
     if (!("gl" in this))
       return;
-    if (this.gl.vs != null) gl.destroyShader(this.gl.vs);
-    if (this.gl.ps != null) gl.destroyShader(this.gl.ps);
-    if (this.gl.program != null) gl.destroyProgram(this.gl.program);
+    if (this.gl.vs != null) gl.deleteShader(this.gl.vs);
+    if (this.gl.ps != null) gl.deleteShader(this.gl.ps);
+    if (this.gl.program != null) gl.deleteProgram(this.gl.program);
     delete this.gl;
   }
 
@@ -468,14 +595,17 @@ class PassNode extends LGraphNode {
     // this.addOutput("out#0", "texture_t");
     // this.addDC = this.addDC.bind(this);
     // this.slider = this.addWidget("slider", "Slider", 0.5, function (v) { }, { min: 0, max: 1 });
-    // this.button = this.addWidget("button", "Button", null, (v) => { this.addDC(); }, {});
+    this.button = this.addWidget("button", "Update", null, (v) => { this.update_thumbnails(global_state.gl); }, {});
+    this.button = this.addWidget("button", "Add DC", null, (v) => { this.addDC(); }, {});
     // this.properties = { dc_cnt: 0 };
     this.title = "Pass Node";
     this.properties = {
       viewport: { width: 512, height: 512 },
       rts: [],
       depth: null,
+      dc_cnt: 0,
     };
+    this.yoffset = 50;
   }
 
   push_rt = (params) => {
@@ -522,26 +652,30 @@ class PassNode extends LGraphNode {
     this.gl = { fb: null, rts: [] };
     this.gl.fb = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.gl.fb);
-    gl.activeTexture(gl.TEXTURE0);
     assert(this.properties.rts.length != 0 || this.properties.depth != null);
     let draw_buffers = [];
-    this.gl.textures = [];
+    this.gl.rts = [];
     for (let i = 0; i < this.properties.rts.length; ++i) {
       let rt = this.properties.rts[i];
       const tex = gl.createTexture();
-      this.gl.textures.push(tex);
-      draw_buffers.push(gl.COLOR_ATTACHMENT0);
+      this.gl.rts.push(tex);
+      draw_buffers.push(gl.COLOR_ATTACHMENT0 + i);
       gl.bindTexture(gl.TEXTURE_2D, tex);
       var format = null;
-      let level = 0;
+      const level = 0;
       switch (rt.format) {
-        case "RGBA8": {
-          format = gl.RGBA8UI;
+        case "RGBA_U8": {
+          format = gl.RGBA8;
+        }
+          break;
+        case "RGBA_F32": {
+          format = gl.RGBA32F;
         }
           break;
         default:
           throw Error("unknown format");
       }
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       gl.texStorage2D(gl.TEXTURE_2D, 1, format, this.properties.viewport.width, this.properties.viewport.height);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, tex, level);
     }
@@ -554,159 +688,58 @@ class PassNode extends LGraphNode {
       var format = null;
       let level = 0;
       switch (rt.format) {
-        case "R16": {
+        case "D16": {
           format = gl.DEPTH_COMPONENT16;
+        }
+          break;
+        case "D32": {
+          format = gl.DEPTH_COMPONENT32F;
         }
           break;
         default:
           throw Error("unknown format");
       }
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       gl.texStorage2D(gl.TEXTURE_2D, 1, format, this.properties.viewport.width, this.properties.viewport.height);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, level);
     }
     gl.drawBuffers(draw_buffers);
-    gl.viewport(0, 0, this.viewport.width, this.viewport.height);
+    gl.viewport(0, 0, this.properties.viewport.width, this.properties.viewport.height);
     gl.clearColor(0, 0, 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   }
 
   update_thumbnails = (gl) => {
+    this.gl_bind(gl);
 
-    // create to render to
-    const targetTextureWidth = 256;
-    const targetTextureHeight = 256;
-    const targetTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, targetTexture);
+    global_state.draw_triangle(gl);
 
-    {
-      // define size and format of level 0
-      const level = 0;
-      const internalFormat = gl.RGBA;
-      const border = 0;
-      const format = gl.RGBA;
-      const type = gl.UNSIGNED_BYTE;
-      const data = null;
-      gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
-        targetTextureWidth, targetTextureHeight, border,
-        format, type, data);
+    let image_data = global_state.get_texture_data(this.gl.rts[0]);
 
-      // set the filtering so we don't need mips
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    }
-    // Create and bind the framebuffer
-    const fb = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetTexture, 0);
+    // let canvas_container = document.getElementById("myglcanvas_container");
 
-    var pipeline = {
-      vs:
-        `precision mediump float;
-        attribute vec2 position;
-        varying vec2 uv;
-        void main() {
-          uv = 0.5 * (position + 1.0);
-          gl_Position = vec4(position, 0, 1);
-        }
-        `,
-      ps:
-        `precision mediump float;
-        varying vec2 uv;
-        uniform sampler2D in_tex;
-        void main() {
-          gl_FragColor = vec4(texture2D(in_tex, uv).xyz, 1.0);
-        }`,
-
-    };
-    gl.clearColor(0, 0, 1, 1);
-    var vsSource = pipeline.vs;
-    var fsSource = pipeline.ps;
-
-    var vertexShader = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vertexShader, vsSource);
-    gl.compileShader(vertexShader);
-
-    if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
-      console.error(gl.getShaderInfoLog(vertexShader));
-    }
-
-    var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fragmentShader, fsSource);
-    gl.compileShader(fragmentShader);
-
-    if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
-      console.error(gl.getShaderInfoLog(fragmentShader));
-    }
-
-    var program = gl.createProgram();
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error(gl.getProgramInfoLog(program));
-    }
-
-    gl.useProgram(program);
-
-    var triangleArray = gl.createVertexArray();
-    gl.bindVertexArray(triangleArray);
-
-    var positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-4, -4, 4, -4, 0, 4]), gl.STATIC_DRAW);
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
-    gl.enableVertexAttribArray(0);
-
-    gl.disable(gl.CULL_FACE);
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.DEPTH_TEST);
-    gl.disable(gl.SCISSOR_TEST);
-    gl.depthFunc(gl.LEQUAL);
-    gl.blendFunc(gl.ONE, gl.ONE);
-
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-    gl.viewport(0, 0, targetTextureWidth, targetTextureHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-
-    var data = new Uint8Array(targetTextureWidth * targetTextureHeight * 4);
-    gl.readPixels(0, 0, targetTextureWidth, targetTextureHeight, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    var array = new Uint8ClampedArray(data);
-    var image = new ImageData(array, targetTextureWidth, targetTextureHeight);
-    
-    var canvas_container = document.getElementById("myglcanvas_container");
-    
-    var myCanvas = document.createElement("canvas");
-    canvas_container.appendChild(myCanvas);
-    var myCanvasContext = myCanvas.getContext("2d");
-    myCanvasContext.putImageData(image, 0, 0);
-
-
-    gl.destroyBuffer(positionBuffer);
-    gl.destroyShader(vertexShader);
-    gl.destroyShader(fragmentShader);
-    gl.destroyProgram(program);
-    gl.destroyFrameBuffer(fb);
-    gl.destroyTexture(targetTexture);
-
-    gl.destroyVertexArray(triangleArray);
-
+    let tmp_canvas = document.createElement("canvas");
+    // canvas_container.appendChild(tmp_canvas);
+    let tmp_canvasContext = tmp_canvas.getContext("2d");
+    tmp_canvas.width = image_data.width;
+    tmp_canvas.height = image_data.height;
+    tmp_canvasContext.putImageData(image_data, 0, 0);
+    var img = document.createElement("img");
+    img.src = tmp_canvas.toDataURL("image/png");
+    this.thumbnails = [img];
+    this.release(gl);
   }
 
   release = (gl) => {
     if (!("gl" in this))
       return;
-    if (this.gl.vfbs != null) gl.destroyFrameBuffer(this.gl.fb);
-    for (let i = 0; i < this.gl.textures.length; ++i) {
-      let tex = this.gl.textures[i];
-      gl.destroyTexture(tex);
+    if (this.gl.vfbs != null) gl.deleteFramebuffer(this.gl.fb);
+    for (let i = 0; i < this.gl.rts.length; ++i) {
+      let tex = this.gl.rts[i];
+      gl.deleteTexture(tex);
     }
     if (this.gl.depth)
-      gl.destroyTexture(this.gl.depth);
+      gl.deleteTexture(this.gl.depth);
     delete this.gl;
   }
 
@@ -716,7 +749,7 @@ class PassNode extends LGraphNode {
       format: "RGBA_U8",
     };
     let tmp_d_state = {
-      format: "R16",
+      format: "D16",
     };
     let datgui_state = {
       width: this.properties.viewport.width,
@@ -763,7 +796,7 @@ class PassNode extends LGraphNode {
     new_rt.add(datgui_state, 'pop');
     new_rt.open();
     let new_d = propnode.datgui.addFolder("Add depth target");
-    new_d.add(tmp_rt_state, 'format', ["RGBA_U8", "RGBA_F32"]);
+    new_d.add(tmp_d_state, 'format', ["D16", "D32"]);
     new_d.add(datgui_state, 'add_depth');
     new_d.add(datgui_state, 'remove_depth');
     new_d.open();
@@ -784,14 +817,32 @@ class PassNode extends LGraphNode {
       return;
     }
 
-    var size = this.size;
-
-    var scale = (0.5 * size[1]) / this.properties.scale;
-
-    var offset = size[1] * 0.5;
-
     ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, size[0], size[1]);
+    var yoffset = this.yoffset;
+    var xoffset = 16;
+    var border = 16;
+    var size = this.size[0] - border * 2;;
+    for (let i in this.properties.rts) {
+      if ("thumbnails" in this && i < this.thumbnails.length) {
+        ctx.drawImage(this.thumbnails[i], xoffset, yoffset, size, size);
+
+      } else {
+        ctx.fillRect(xoffset, yoffset, size, size);
+      }
+      yoffset += size + border;
+    }
+    if (this.properties.depth != null) {
+      if ("depth_thumbnail" in this) {
+        ctx.drawImage(this.depth_thumbnail, xoffset, yoffset, size, size);
+
+      } else {
+        ctx.fillRect(xoffset, yoffset, size, size);
+      }
+      yoffset += size + border;
+    }
+    // this.size[0] = xoffset + size + border;
+    this.size[1] = yoffset;
+    // ctx.fillRect(0, 0, size[0], size[1]);
     ctx.strokeStyle = "#555";
 
 
@@ -805,10 +856,10 @@ class PassNode extends LGraphNode {
     // this.properties.dc_cnt = 0;
   }
 
-  // addDC() {
-  //   this.addInput("DC#" + this.properties.dc_cnt, "drawcall_t");
-  //   this.properties.dc_cnt += 1;
-  // }
+  addDC() {
+    this.addInput("DC#" + this.properties.dc_cnt, "drawcall_t");
+    this.properties.dc_cnt += 1;
+  }
 
   onMouseDown(e, local_pos) {
 
@@ -827,7 +878,7 @@ class GraphNodeComponent extends React.Component {
 
   componentDidMount() {
 
-    global_state.litegraph_canvas = new LGraphCanvas("#mycanvas", this.graph);
+    global_state.litegraph_canvas = new LGraphCanvas("#tmp_canvas", this.graph);
     global_state._selected_nodes = {};
     global_state.litegraph_canvas.onSelectionChange = (
       nodes
@@ -906,7 +957,7 @@ class GraphNodeComponent extends React.Component {
   render() {
 
     return (
-      <div style={{ width: '100%', height: '100%' }} id="mycanvas_container">
+      <div style={{ width: '100%', height: '100%' }} id="tmp_canvas_container">
         <Button style={{ margin: 10 }} onClick={this.dumpJson}>
           log json
                 </Button>
@@ -916,7 +967,7 @@ class GraphNodeComponent extends React.Component {
         <Button style={{ margin: 10 }} onClick={() => { global_state.exec_reset(); }}>
           clear graph
                 </Button>
-        <canvas id='mycanvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
+        <canvas id='tmp_canvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
       </div>
     );
   }
