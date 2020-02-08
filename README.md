@@ -12,7 +12,7 @@ npm install && npm start
 * regl
 * three.js
 * React
-* litegraph
+* [litegraph](https://github.com/jagenjo/litegraph.js) - node editor
 * GoldenLayout
 * Ace
 

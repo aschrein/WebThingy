@@ -2563,6 +2563,13 @@ supported callbacks:
       return slot < this.inputs.length && this.inputs[slot].link != null;
   };
 
+  LGraphNode.prototype.clearInput = function() {
+    let len = this.inputs.length;
+    for (let i = len - 1; i >= 0; i--) {
+      this.removeInput(i);
+    }
+  };
+
   /**
    * tells you info about an input connection (which node, type, etc)
    * @method getInputInfo
@@ -2602,6 +2609,13 @@ supported callbacks:
       }
       return this.graph.getNodeById(link_info.origin_id);
   };
+
+  LGraphNode.prototype.getInputNodeByName = function(name) {
+    let slot = this.findInputSlot(name);
+    if (slot < 0)
+        return null;
+    return this.getInputNode(slot);
+};
 
   /**
    * returns the value of an input with this name, otherwise checks if there is a property with that name
@@ -3042,6 +3056,33 @@ supported callbacks:
       }
       this.setDirtyCanvas(true, true);
   };
+
+  LGraphNode.prototype.removeInputByName = function(name) {
+    let slot = -1;
+    for (var i = 0; i < this.inputs.length; ++i) {
+        if (this.inputs[i].name == name)
+            slot = i;
+    }
+    if (slot < 0)
+        return;
+    this.disconnectInput(slot);
+    this.inputs.splice(slot, 1);
+    for (var i = slot; i < this.inputs.length; ++i) {
+        if (!this.inputs[i]) {
+            continue;
+        }
+        var link = this.graph.links[this.inputs[i].link];
+        if (!link) {
+            continue;
+        }
+        link.target_slot -= 1;
+    }
+    this.size = this.computeSize();
+    if (this.onInputRemoved) {
+        this.onInputRemoved(slot);
+    }
+    this.setDirtyCanvas(true, true);
+};
 
   /**
    * add an special connection to this node (used for special kinds of graphs)

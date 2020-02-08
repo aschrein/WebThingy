@@ -9,7 +9,7 @@ import 'brace/mode/glsl';
 // Import a Theme (okadia, github, xcode etc)
 import 'brace/theme/tomorrow_night_eighties';
 import { JSONEditor } from 'react-json-editor-viewer';
-import { LGraph, LGraphCanvas, LiteGraph, LGraphNode } from 'litegraph.js';
+// import { LGraph, LGraphCanvas, LiteGraph, LGraphNode } from 'litegraph.js';
 // import GLComponent from './glnodes';
 import * as dat from 'dat.gui';
 // import {Button, useState} from 'react';
@@ -17,8 +17,15 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { vec2, vec3, vec4, mat2, mat3, mat4, quat } from 'gl-matrix';
 import { Modal, Button, FormControl } from 'react-bootstrap';
 
-var TokenString = require('glsl-tokenizer/string');
-var ParseTokens = require('glsl-parser/direct');
+// var TokenString = require('glsl-tokenizer/string');
+// var ParseTokens = require('glsl-parser/direct');
+var glsl_parser = require('./3rdparty/glsl_parser/glsl_parser');
+var LG = require('./3rdparty/litegraph');
+let LGraph = LG.LGraph;
+let LGraphCanvas = LG.LGraphCanvas;
+let LiteGraph = LG.LiteGraph;
+let LGraphNode = LG.LGraphNode;
+
 
 function assert(condition) {
   if (!condition) {
@@ -112,6 +119,18 @@ global_state.exec_reset = () => {
 global_state.get_src = (name) => {
   assert(name in global_state.litegraph.config.srcs);
   return global_state.litegraph.config.srcs[name].code;
+};
+global_state._scr_change_table = [];
+// Just notify everyone about any change to any source
+global_state.on_src_change = (fn) => {
+  // if (!(name in global_state._scr_change_table))
+  //   global_state._scr_change_table[name] = [];
+  // global_state._scr_change_table[name].push(fn);
+  global_state._scr_change_table.push(fn);
+};
+global_state.set_src = (name, text) => {
+  global_state.litegraph.config.srcs[name].code = text;
+  global_state._scr_change_table.forEach(fn => fn(name));
 };
 global_state.draw_triangle = (gl) => {
   var pipeline = {
@@ -210,36 +229,8 @@ global_state.draw_triangle = (gl) => {
   gl.deleteShader(fragmentShader);
   gl.deleteProgram(program);
 };
-global_state.get_texture_data = (tex) => {
+global_state.render_texture = (tex) => {
   let gl = global_state.gl;
-  // create to render to
-  const targetTextureWidth = 256;
-  const targetTextureHeight = 256;
-  const targetTexture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, targetTexture);
-
-  {
-    // define size and format of level 0
-    const level = 0;
-    const internalFormat = gl.RGBA;
-    const border = 0;
-    const format = gl.RGBA;
-    const type = gl.UNSIGNED_BYTE;
-    const data = null;
-    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
-      targetTextureWidth, targetTextureHeight, border,
-      format, type, data);
-
-    // set the filtering so we don't need mips
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  }
-  // Create and bind the framebuffer
-  const fb = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetTexture, 0);
-
   var pipeline = {
     vs:
       `precision mediump float;
@@ -298,6 +289,52 @@ global_state.get_texture_data = (tex) => {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-4, -4, 4, -4, 0, 4]), gl.STATIC_DRAW);
   gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
   gl.enableVertexAttribArray(0);
+  gl.activeTexture(gl.TEXTURE0 + 0);
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.uniform1i(gl.getUniformLocation(program, "in_tex"), 0);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  gl.deleteBuffer(positionBuffer);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+  gl.deleteProgram(program);
+  gl.deleteVertexArray(triangleArray);
+};
+global_state.get_texture_data = (tex) => {
+  let gl = global_state.gl;
+  // create to render to
+  const targetTextureWidth = 256;
+  const targetTextureHeight = 256;
+  const targetTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, targetTexture);
+
+  {
+    // define size and format of level 0
+    const level = 0;
+    const internalFormat = gl.RGBA;
+    const border = 0;
+    const format = gl.RGBA;
+    const type = gl.UNSIGNED_BYTE;
+    const data = null;
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+      targetTextureWidth, targetTextureHeight, border,
+      format, type, data);
+
+    // set the filtering so we don't need mips
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  // Create and bind the framebuffer
+  const fb = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetTexture, 0);
+
+
 
   gl.disable(gl.CULL_FACE);
   gl.disable(gl.DEPTH_TEST);
@@ -306,34 +343,21 @@ global_state.get_texture_data = (tex) => {
   gl.depthFunc(gl.LEQUAL);
   gl.blendFunc(gl.ONE, gl.ONE);
 
-
-  gl.activeTexture(gl.TEXTURE0 + 0);
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.uniform1i(gl.getUniformLocation(program, "in_tex"), 0);
-
   gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
   gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
   gl.viewport(0, 0, targetTextureWidth, targetTextureHeight);
   gl.clearColor(0, 0, 1, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  global_state.render_texture(tex);
 
   var data = new Uint8Array(targetTextureWidth * targetTextureHeight * 4);
   gl.readPixels(0, 0, targetTextureWidth, targetTextureHeight, gl.RGBA, gl.UNSIGNED_BYTE, data);
 
 
-  gl.deleteBuffer(positionBuffer);
-  gl.deleteShader(vertexShader);
-  gl.deleteShader(fragmentShader);
-  gl.deleteProgram(program);
   gl.deleteFramebuffer(fb);
   gl.deleteTexture(targetTexture);
 
-  gl.deleteVertexArray(triangleArray);
   let array = new Uint8ClampedArray(data);
   let image = new ImageData(array, targetTextureWidth, targetTextureHeight);
   return image;
@@ -351,6 +375,15 @@ global_state.get_texture_data = (tex) => {
 //   * multiple drawcalls as inputs
 //   * multiple output render targets
 //   * live view render targets(configure custom visualization text)
+
+class MyLGraphNode extends LGraphNode {
+  constructor() {
+    super();
+    this.dirty  = true;
+  }
+  setDirty = (flag) => {this.dirty = flag;}
+  isDirty = () => {return this.dirty};
+}
 
 class GLComponent extends React.Component {
   constructor(props, context) {
@@ -390,12 +423,12 @@ class GLComponent extends React.Component {
   }
 }
 
-class BackBufferNode extends LGraphNode {
+class BackBufferNode extends MyLGraphNode {
   constructor() {
     super();
     this.addInput("in", "texture_t");
     this.properties = {};
-    this.title = "Back Buffer Node";
+    this.title = "Back Buffer";
     let list = global_state.litegraph.findNodesByType("gfx/BackBufferNode");
     // Remove all backbuffer nodes
     // This enforces only one backbuffer node per graph
@@ -407,7 +440,7 @@ class BackBufferNode extends LGraphNode {
   }
 }
 
-class PipelineNode extends LGraphNode {
+class PipelineNode extends MyLGraphNode {
   constructor() {
     super();
 
@@ -416,7 +449,7 @@ class PipelineNode extends LGraphNode {
       ps: null,
     };
     this.addOutput("out", "pipeline_t");
-    this.title = "Pipeline State Node";
+    this.title = "Pipeline";
     this.attributes = [];
     global_state.exec_after('remove_src', (cmd) => {
       if (cmd.src_name == this.vs) {
@@ -424,6 +457,12 @@ class PipelineNode extends LGraphNode {
       }
       if (cmd.src_name == this.ps) {
         this.set_ps(null);
+      }
+    });
+    global_state.on_src_change((src_name) => {
+      if (src_name == this.vs) {
+      }
+      if (src_name == this.ps) {
       }
     });
   }
@@ -523,40 +562,26 @@ class PipelineNode extends LGraphNode {
   parse_shaders() {
     this.clean_inputs();
     this.attributes = [];
-    if (this.vs != null) {
+    if (this.properties.vs != null) {
       try {
         // Parse vertex shader for attributes
-        var tokens = TokenString(this.vs);
-        var ast = ParseTokens(tokens);
-        // console.log(ast);
-        for (let i = 0; i < ast.children.length; i++) {
-          let chld = ast.children[i];
-          // console.log(chld);
-          if (chld.token.data == "attribute") {
-            var type = null;
-            for (let j = 0; j < chld.children[0].children.length; j++) {
-              let chld_1 = chld.children[0].children[j];
+        var ast = glsl_parser.parse(global_state.get_src(this.properties.vs));
 
-              if (chld_1.type == "decllist") {
-                let name = chld_1.children[0].data;
-                // console.log(type + " " + chld_1.children[0].data);
-                this.attributes.push({ name: name, type: type });
-              }
-
-              if (chld_1.token.type == "keyword") {
-                type = chld_1.token.data + "_t";
-              }
+        if (ast.type != "root")
+          throw Error();
+        ast.statements.forEach(s => {
+          if (s.type == "declarator") {
+            if (s.typeAttribute.qualifier == "attribute") {
+              this.attributes.push({ name: s.declarators[0].name.name, type: s.typeAttribute.name });
             }
-
           }
-        }
+        });
       } catch (e) {
         console.log(e);
       }
     }
-    // for (let i in this.attributes) {
-    //   this.addInput(this.attributes[i].name, "attribute_t");
-    // }
+    // console.log(this.attributes);
+    return this.attributes;
   }
 
   onSelected() {
@@ -567,14 +592,29 @@ class PipelineNode extends LGraphNode {
 
 }
 
-class DrawCallNode extends LGraphNode {
+class DrawCallNode extends MyLGraphNode {
   constructor() {
     super();
     this.addOutput("out", "drawcall_t");
-
-    this.title = "Draw Call Node";
+    this.addInput("pipeline", "pipeline_t");
+    this.title = "Draw Call";
+    this.onConnectionsChange = (c_type, target_slot, flag, link_info, input) => {
+      if (input.type == "pipeline_t") {
+        this.update_inputs();
+      }
+    };
   }
 
+  update_inputs = () => {
+    // this.clearInput();
+    for (var i = this.inputs.length - 1; i > 0; i--)
+      this.removeInput(i)
+    let pipeline = this.getInputNodeByName("pipeline");
+    if (pipeline == null)
+      return;
+    let attributes = pipeline.parse_shaders();
+    attributes.forEach(k => this.addInput(k.name, "attribute_t"));
+  }
 
   onSelected() {
   }
@@ -582,12 +622,9 @@ class DrawCallNode extends LGraphNode {
   onDeselected() {
   }
 
-  addAttribute(name) {
-    this.addInput(name, "attribute_t");
-  }
 }
 
-class PassNode extends LGraphNode {
+class PassNode extends MyLGraphNode {
   constructor() {
     super();
     // this.addInput("in#0", "texture_t");
@@ -598,7 +635,7 @@ class PassNode extends LGraphNode {
     this.button = this.addWidget("button", "Update", null, (v) => { this.update_thumbnails(global_state.gl); }, {});
     this.button = this.addWidget("button", "Add DC", null, (v) => { this.addDC(); }, {});
     // this.properties = { dc_cnt: 0 };
-    this.title = "Pass Node";
+    this.title = "Pass";
     this.properties = {
       viewport: { width: 512, height: 512 },
       rts: [],
@@ -606,12 +643,34 @@ class PassNode extends LGraphNode {
       dc_cnt: 0,
     };
     this.yoffset = 50;
+    this.onPropertyChange = (prop, val) => {
+      this.update_outputs();
+    };
+  }
+
+  clear_outputs = () => {
+    let len = this.outputs.length;
+    for (let i = len - 1; i >= 0; i--) {
+      this.removeOutput(i);
+    }
+    this.properties.dc_cnt = 0;
+  }
+
+  update_outputs = () => {
+    this.clear_outputs();
+    for (let i = 0; i < this.properties.rts.length; ++i) {
+      this.addOutput("rt#" + i, "texture_t");
+    }
+    if (this.properties.depth != null) {
+      this.addOutput("depth", "texture_t");
+    }
   }
 
   push_rt = (params) => {
     let rt_params = {};
     rt_params.format = params.format;
     this.properties.rts.push(rt_params)
+    this.update_outputs();
   }
 
   pop_rt = () => {
@@ -619,25 +678,36 @@ class PassNode extends LGraphNode {
     //   delete this.properties.rts[i];
     //   break;
     // }
+    if (this.properties.rts.length == 0)
+      return;
     this.properties.rts.pop();
+    this.update_outputs();
   }
 
   add_depth = (params) => {
+    if (this.properties.depth != null)
+      return;
     let d_params = {};
     d_params.format = params.format;
     this.properties.depth = d_params;
+    this.update_outputs();
   }
 
   remove_depth = () => {
+    if (this.properties.depth == null)
+      return;
     this.properties.depth = null;
+    this.update_outputs();
   }
 
   set_width = (width) => {
     this.properties.viewport.width = width;
   }
+
   set_height = (height) => {
     this.properties.viewport.height = height;
   }
+
   onExecute() {
     // var A = this.getInputData(0);
     // if (A === undefined)
@@ -848,13 +918,7 @@ class PassNode extends LGraphNode {
 
   }
 
-  clearInput() {
-    // let len = this.inputs.length;
-    // for (let i = len - 1; i >= 0; i--) {
-    //   this.removeInput(i);
-    // }
-    // this.properties.dc_cnt = 0;
-  }
+
 
   addDC() {
     this.addInput("DC#" + this.properties.dc_cnt, "drawcall_t");
@@ -917,16 +981,7 @@ class GraphNodeComponent extends React.Component {
     //   console.log("deselected" + node);
     //   global_state.exec_deselected([node]);
     // };
-    var node_const = LiteGraph.createNode("basic/const");
-    node_const.pos = [200, 200];
-    this.graph.add(node_const);
-    node_const.setValue(4.5);
 
-    var node_watch = LiteGraph.createNode("basic/watch");
-    node_watch.pos = [700, 200];
-    this.graph.add(node_watch);
-
-    node_const.connect(0, node_watch, 0);
 
     this.graph.start();
 
@@ -1095,8 +1150,7 @@ class TextEditorComponent extends React.Component {
   onChange(newValue) {
     if (this.selected_src == null)
       return;
-    // console.log(this.current_src + " has changed to " + newValue);
-    global_state.litegraph.config.srcs[this.selected_src].code = newValue;
+    global_state.set_src(this.selected_src, newValue);
   }
 
   onResize() {
@@ -1169,6 +1223,8 @@ class PropertiesNode extends React.Component {
   }
 
   display_node = (node) => {
+    if (node == null)
+      return;
     this.datgui = new dat.GUI({ autoPlace: false });
     if ("display" in node) {
       node.display(this);
