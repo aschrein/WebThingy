@@ -6,26 +6,20 @@ import './css/main.css';
 import 'litegraph.js/css/litegraph.css'
 import AceEditor from 'react-ace';
 import 'brace/mode/glsl';
-// Import a Theme (okadia, github, xcode etc)
 import 'brace/theme/tomorrow_night_eighties';
 import { JSONEditor } from 'react-json-editor-viewer';
-// import { LGraph, LGraphCanvas, LiteGraph, LGraphNode } from 'litegraph.js';
-// import GLComponent from './glnodes';
 import * as dat from 'dat.gui';
-// import {Button, useState} from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { vec2, vec3, vec4, mat2, mat3, mat4, quat } from 'gl-matrix';
 import { Modal, Button, FormControl } from 'react-bootstrap';
 
-// var TokenString = require('glsl-tokenizer/string');
-// var ParseTokens = require('glsl-parser/direct');
-var glsl_parser = require('./3rdparty/glsl_parser/glsl_parser');
 var LG = require('./3rdparty/litegraph');
 let LGraph = LG.LGraph;
 let LGraphCanvas = LG.LGraphCanvas;
 let LiteGraph = LG.LiteGraph;
 let LGraphNode = LG.LGraphNode;
 
+let isSetsEqual = (a, b) => a.size === b.size && [...a].every(value => b.has(value));
 
 function assert(condition) {
   if (!condition) {
@@ -216,10 +210,12 @@ global_state.draw_triangle = (gl) => {
   gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
   gl.enableVertexAttribArray(1);
 
-  gl.enable(gl.CULL_FACE);
-  gl.enable(gl.DEPTH_TEST);
-  gl.enable(gl.SCISSOR_TEST);
+  gl.disable(gl.CULL_FACE);
+  gl.frontFace(gl.CW);
+  gl.disable(gl.DEPTH_TEST);
+  gl.disable(gl.SCISSOR_TEST);
   gl.depthFunc(gl.LEQUAL);
+  gl.disable(gl.BLEND);
   gl.blendFunc(gl.ONE, gl.ONE);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 
@@ -418,7 +414,7 @@ global_state.update = () => {
   }
   sorted_list.forEach(node => { if (node.update) node.update(); });
 };
-
+global_state.periodic_update = setInterval(global_state.update, 1000);
 // TODO:
 // * src node/pipeline node
 // * drawcall node
@@ -437,6 +433,7 @@ class MyLGraphNode extends LGraphNode {
     super();
   }
   set_dirty = () => { global_state.set_dirty(this); }
+  onConfigure = () => { if (this.update) this.set_dirty(); }
 }
 
 class GLComponent extends React.Component {
@@ -560,7 +557,7 @@ class PipelineNode extends MyLGraphNode {
     }
 
     let ps_source = global_state.get_src(this.properties.ps);
-    this.gl.ps = gl.createShader(gl.PIXEL_SHADER);
+    this.gl.ps = gl.createShader(gl.FRAGMENT_SHADER);
     gl.shaderSource(this.gl.ps, ps_source);
     gl.compileShader(this.gl.ps);
 
@@ -582,14 +579,20 @@ class PipelineNode extends MyLGraphNode {
     }
 
     gl.useProgram(this.gl.program);
-    gl.enable(gl.CULL_FACE);
+    gl.disable(gl.CULL_FACE);
     gl.frontFace(gl.CW);
-    gl.enable(gl.DEPTH_TEST);
+    gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.SCISSOR_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.disable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE);
     return true;
+  }
+
+  get_attrib_location = (gl, name) => {
+    if (!this.gl || !this.gl.program)
+      return null;
+    return gl.getAttribLocation(this.gl.program, name);
   }
 
   release = (gl) => {
@@ -626,19 +629,16 @@ class PipelineNode extends MyLGraphNode {
     if (this.properties.vs != null) {
       try {
         // Parse vertex shader for attributes
-        var ast = glsl_parser.parse(global_state.get_src(this.properties.vs));
-
-        if (ast.type != "root")
-          throw Error();
-        ast.statements.forEach(s => {
-          if (s.type == "declarator") {
-            if (s.typeAttribute.qualifier == "attribute") {
-              this.attributes.push({ name: s.declarators[0].name.name, type: s.typeAttribute.name });
-            }
-          }
-        });
+        if (typeof window.glslang == "undefined")
+          throw Error("glslang is not ready"); 
+        let json = JSON.parse(window.glslang.parse_attributes(global_state.get_src(this.properties.vs), "vertex"));
+        for (var i = 0; i < json.attributes.length - 1; i++) {
+          let attrib = json.attributes[i];
+          this.attributes.push({ name: attrib.name, type: attrib.type });
+        }
       } catch (e) {
         console.log(e);
+        return null;
       }
     }
     // console.log(this.attributes);
@@ -653,28 +653,164 @@ class PipelineNode extends MyLGraphNode {
 
 }
 
+class VertexBufferNode extends MyLGraphNode {
+  constructor() {
+    super();
+    this.addOutput("out", "attribute_t");
+    this.title = "Vertex Buffer";
+    this.properties = {
+      src: null
+    };
+    global_state.on_src_change((src_name) => {
+      if (src_name == this.properties.src) {
+        this.set_dirty();
+      }
+    });
+    this.buf = { attributes: {} };
+    this.set_dirty();
+  }
+
+  display = (propnode) => {
+    let src_list = [];
+    let datgui_state = {
+      src: this.properties.src,
+    };
+    Object.keys(global_state.litegraph.config.srcs).forEach(e => src_list.push(e));
+    propnode.datgui.add(datgui_state, 'src', src_list)
+      .onChange((v) => this.set_src(v));
+    let folder = propnode.datgui.addFolder("Attributes");
+    if (this.buf) {
+      for (let i in this.buf.attributes) {
+        let tmp = {
+          prop: () => { },
+        };
+        folder.add(tmp, "prop").name(i);
+      }
+    }
+    folder.open();
+  }
+
+  set_src = (name) => {
+    this.properties.src = name;
+    this.set_dirty();
+  }
+
+  get_buffer = () => {
+    return this.buf;
+  }
+
+  parse_src = () => {
+    if (!this.properties.src)
+      return;
+    let text = global_state.get_src(this.properties.src);
+    if (!text)
+      return {};
+    let json = JSON.parse(text);
+    assert(json);
+    // Json we're looking for has a certain scheme:
+    // {attributes:{name:{data:, type}}}
+    assert(json.attributes);
+    for (let i in json.attributes)
+      assert(json.attributes[i].data);
+    // json.attributes.forEach(attribute => {});
+    this.buf = json;
+  }
+
+  update = () => {
+    this.parse_src();
+  }
+}
+
 class DrawCallNode extends MyLGraphNode {
   constructor() {
     super();
     this.addOutput("out", "drawcall_t");
     this.addInput("pipeline", "pipeline_t");
     this.title = "Draw Call";
+
     this.onConnectionsChange = (c_type, target_slot, flag, link_info, input) => {
-      if (input.type == "pipeline_t") {
-        this.update_inputs();
-      }
+      // if (input.type == "pipeline_t") {
+      this.set_dirty();
+      // } else {
+      // return false;
+      // }
     };
+    this.last_attributes = new Set();
+    // this.onConnectInput = (target_slot, output_type, output) => {
+    //   if (output_type == "pipeline_t") {
+    //     return true;
+    //   } else {
+    //     if ()
+    //     return false;
+    //   }
+    // };
   }
 
   update_inputs = () => {
-    // this.clearInput();
-    for (var i = this.inputs.length - 1; i > 0; i--)
-      this.removeInput(i)
+
+    let pipeline = this.getInputNodeByName("pipeline");
+    var sat = new Set();
+    this.attributes = [];
+    if (pipeline) {
+      this.attributes = pipeline.parse_shaders();
+      if (!this.attributes)
+        return;
+      this.attributes.forEach(a => sat.add(a.name));
+    }
+    this.last_attributes.clear();
+    this.inputs.forEach(input => this.last_attributes.add(input.name));
+    this.last_attributes.delete("pipeline");
+    if (!isSetsEqual(this.last_attributes, sat)) {
+      this.last_attributes.forEach(attr => { if (!sat.has(attr)) { this.removeInputByName(attr) } });
+      sat.forEach(attr => { if (!this.last_attributes.has(attr)) { this.addInput(attr, "attribute_t") } });
+      // for (var i = this.inputs.length - 1; i > 0; i--)
+      //   this.removeInput(i);
+      // attributes.forEach(k => this.addInput(k.name, "attribute_t"));
+    }
+  }
+
+  draw = (gl) => {
     let pipeline = this.getInputNodeByName("pipeline");
     if (pipeline == null)
       return;
-    let attributes = pipeline.parse_shaders();
-    attributes.forEach(k => this.addInput(k.name, "attribute_t"));
+    pipeline.bind(gl);
+    var glarr = gl.createVertexArray();
+    gl.bindVertexArray(glarr);
+    let gl_buffers = [];
+    for (let i in this.attributes) {
+      let attrib = this.attributes[i];
+      let input = this.getInputNodeByName(attrib.name);
+      if (!input)
+        continue;
+      let buf = input.get_buffer();
+      assert(attrib.name in buf.attributes && "data" in buf.attributes[attrib.name]);
+      let data = buf.attributes[attrib.name].data;
+      let arr = new Float32Array(data);
+
+      var gl_buffer = gl.createBuffer();
+      gl_buffers.push(gl_buffer);
+      gl.bindBuffer(gl.ARRAY_BUFFER, gl_buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
+      let loc = pipeline.get_attrib_location(gl, attrib.name);
+      console.log(attrib.name + " at " + loc);
+      var comps = -1;
+      switch (attrib.type) {
+        case "vec2":
+          comps = 2;
+          break;
+        case "vec3":
+          comps = 3;
+          break;
+        default:
+          throw Error("unrecognized type");
+      };
+      gl.vertexAttribPointer(loc, comps, gl.FLOAT, false, 0, 0);
+      gl.enableVertexAttribArray(loc);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl_buffers.forEach(buf => gl.deleteBuffer(buf));
+    gl.deleteVertexArray(glarr);
+    pipeline.release(gl);
   }
 
   update = () => {
@@ -697,8 +833,9 @@ class PassNode extends MyLGraphNode {
     // this.addOutput("out#0", "texture_t");
     // this.addDC = this.addDC.bind(this);
     // this.slider = this.addWidget("slider", "Slider", 0.5, function (v) { }, { min: 0, max: 1 });
-    this.button = this.addWidget("button", "Update", null, (v) => { this.update_thumbnails(global_state.gl); }, {});
+    // this.button = this.addWidget("button", "Update", null, (v) => {this.update_thumbnails(global_state.gl); }, {});
     this.button = this.addWidget("button", "Add DC", null, (v) => { this.addDC(); }, {});
+    this.button = this.addWidget("button", "draw", null, (v) => { this.draw(); }, {});
     // this.properties = { dc_cnt: 0 };
     this.title = "Pass";
     this.properties = {
@@ -707,10 +844,27 @@ class PassNode extends MyLGraphNode {
       depth: null,
       dc_cnt: 0,
     };
-    this.yoffset = 50;
+    this.yoffset = 100;
     this.onPropertyChange = (prop, val) => {
       this.update_outputs();
     };
+  }
+
+  draw = () => {
+    this.bind(global_state.gl);
+    this.inputs.forEach(input => {
+
+      if (input.type == "drawcall_t") {
+        let link = global_state.litegraph.links[input.link];
+        if (!link)
+          return;
+        let dc = global_state.litegraph.getNodeById(link.origin_id);
+        // console.log(dc);
+        dc.draw(global_state.gl);
+      }
+    });
+    this.update_thumbnails(global_state.gl);
+    this.release(global_state.gl);
   }
 
   clear_outputs = () => {
@@ -783,7 +937,7 @@ class PassNode extends MyLGraphNode {
     // this.setOutputData(0, "texture_0");
   }
 
-  gl_bind = (gl) => {
+  bind = (gl) => {
     this.gl = { fb: null, rts: [] };
     this.gl.fb = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.gl.fb);
@@ -845,9 +999,9 @@ class PassNode extends MyLGraphNode {
   }
 
   update_thumbnails = (gl) => {
-    this.gl_bind(gl);
+    // this.bind(gl);
 
-    global_state.draw_triangle(gl);
+    // global_state.draw_triangle(gl);
 
     let image_data = global_state.get_texture_data(this.gl.rts[0]);
 
@@ -862,7 +1016,7 @@ class PassNode extends MyLGraphNode {
     var img = document.createElement("img");
     img.src = tmp_canvas.toDataURL("image/png");
     this.thumbnails = [img];
-    this.release(gl);
+    // this.release(gl);
   }
 
   release = (gl) => {
@@ -1058,9 +1212,10 @@ class GraphNodeComponent extends React.Component {
     LiteGraph.registerNodeType("gfx/BackBufferNode", BackBufferNode);
     LiteGraph.registerNodeType("gfx/DrawCallNode", DrawCallNode);
     LiteGraph.registerNodeType("gfx/PipelineNode", PipelineNode);
+    LiteGraph.registerNodeType("gfx/VertexBufferNode", VertexBufferNode);
     // Load default json scene
     init_litegraph(require('./default_graph.json'));
-    this.dumpJson();
+    // this.dumpJson();
   }
 
   onResize() {
