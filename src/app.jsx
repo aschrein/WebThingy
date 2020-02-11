@@ -229,9 +229,10 @@ global_state.render_texture = (tex) => {
   let gl = global_state.gl;
   var pipeline = {
     vs:
-      `precision mediump float;
-      attribute vec2 position;
-      varying vec2 uv;
+      `#version 300 es
+      precision highp float;
+      in vec2 position;
+      out vec2 uv;
       void main() {
         uv = 0.5 * (position + 1.0);
         uv.y = 1.0 - uv.y;
@@ -239,11 +240,13 @@ global_state.render_texture = (tex) => {
       }
       `,
     ps:
-      `precision mediump float;
-      varying vec2 uv;
+      `#version 300 es
+      precision highp float;
+      in vec2 uv;
       uniform sampler2D in_tex;
+      out vec4 fragColor;
       void main() {
-        gl_FragColor = vec4(texture2D(in_tex, uv).xyz, 1.0);
+        fragColor = vec4(texture(in_tex, uv).xyz, 1.0);
       }`,
 
   };
@@ -581,7 +584,8 @@ class PipelineNode extends MyLGraphNode {
     gl.useProgram(this.gl.program);
     gl.disable(gl.CULL_FACE);
     gl.frontFace(gl.CW);
-    gl.disable(gl.DEPTH_TEST);
+    gl.depthMask(true);
+    gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.SCISSOR_TEST);
     gl.depthFunc(gl.LEQUAL);
     gl.disable(gl.BLEND);
@@ -630,8 +634,10 @@ class PipelineNode extends MyLGraphNode {
       try {
         // Parse vertex shader for attributes
         if (typeof window.glslang == "undefined")
-          throw Error("glslang is not ready"); 
-        let json = JSON.parse(window.glslang.parse_attributes(global_state.get_src(this.properties.vs), "vertex"));
+          throw Error("glslang is not ready");
+        let str = window.glslang.parse_attributes(global_state.get_src(this.properties.vs), "vertex");
+        let json = JSON.parse(str);
+        console.log(str);
         for (var i = 0; i < json.attributes.length - 1; i++) {
           let attrib = json.attributes[i];
           this.attributes.push({ name: attrib.name, type: attrib.type });
@@ -992,31 +998,36 @@ class PassNode extends MyLGraphNode {
       gl.texStorage2D(gl.TEXTURE_2D, 1, format, this.properties.viewport.width, this.properties.viewport.height);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, level);
     }
+    var status = gl.checkFramebufferStatus(gl.DRAW_FRAMEBUFFER);
+    if (status != gl.FRAMEBUFFER_COMPLETE) {
+      throw Error('fb status: ' + status.toString(16));
+    }
     gl.drawBuffers(draw_buffers);
     gl.viewport(0, 0, this.properties.viewport.width, this.properties.viewport.height);
-    gl.clearColor(0, 0, 1, 1);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clearDepth(1.0);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   }
 
   update_thumbnails = (gl) => {
-    // this.bind(gl);
+    this.thumbnails = [];
+    let rts = [...this.gl.rts];
+    if (this.gl.depth)
+      rts.push(this.gl.depth);
+    for (let i in rts) {
+      let image_data = global_state.get_texture_data(rts[i]);
 
-    // global_state.draw_triangle(gl);
-
-    let image_data = global_state.get_texture_data(this.gl.rts[0]);
-
-    // let canvas_container = document.getElementById("myglcanvas_container");
-
-    let tmp_canvas = document.createElement("canvas");
-    // canvas_container.appendChild(tmp_canvas);
-    let tmp_canvasContext = tmp_canvas.getContext("2d");
-    tmp_canvas.width = image_data.width;
-    tmp_canvas.height = image_data.height;
-    tmp_canvasContext.putImageData(image_data, 0, 0);
-    var img = document.createElement("img");
-    img.src = tmp_canvas.toDataURL("image/png");
-    this.thumbnails = [img];
-    // this.release(gl);
+      let tmp_canvas = document.createElement("canvas");
+      let tmp_canvasContext = tmp_canvas.getContext("2d");
+      tmp_canvas.width = image_data.width;
+      tmp_canvas.height = image_data.height;
+      tmp_canvasContext.putImageData(image_data, 0, 0);
+      var img = document.createElement("img");
+      img.src = tmp_canvas.toDataURL("image/png");
+      this.thumbnails.push(img);
+    }
+    if (this.gl.depth)
+      this.depth_thumbnail = this.thumbnails[this.thumbnails.length - 1];
   }
 
   release = (gl) => {

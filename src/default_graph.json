@@ -1,6 +1,6 @@
 {
   "last_node_id": 9,
-  "last_link_id": 17,
+  "last_link_id": 18,
   "nodes": [
     {
       "id": 8,
@@ -22,13 +22,13 @@
         "1": 26
       },
       "flags": {},
-      "order": 5,
+      "order": 0,
       "mode": 0,
       "inputs": [
         {
           "name": "in",
           "type": "texture_t",
-          "link": 8
+          "link": null
         }
       ],
       "outputs": [],
@@ -36,11 +36,50 @@
       "properties": {}
     },
     {
+      "id": 5,
+      "type": "gfx/PipelineNode",
+      "pos": {
+        "0": -199,
+        "1": -52,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "pipeline_t",
+          "links": [
+            5,
+            11
+          ]
+        }
+      ],
+      "title": "Pipeline",
+      "properties": {
+        "vs": "test.vs.glsl",
+        "ps": "test.ps.glsl"
+      }
+    },
+    {
       "id": 6,
       "type": "gfx/DrawCallNode",
       "pos": {
-        "0": 174,
-        "1": -14,
+        "0": 175,
+        "1": -27,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -90,8 +129,8 @@
       "id": 7,
       "type": "gfx/DrawCallNode",
       "pos": {
-        "0": 154,
-        "1": 177,
+        "0": 172,
+        "1": 101,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -106,7 +145,7 @@
         "1": 66
       },
       "flags": {},
-      "order": 2,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -122,7 +161,7 @@
         {
           "name": "color",
           "type": "attribute_t",
-          "link": null
+          "link": 18
         }
       ],
       "outputs": [
@@ -141,8 +180,8 @@
       "id": 9,
       "type": "gfx/VertexBufferNode",
       "pos": {
-        "0": -146,
-        "1": 173,
+        "0": -211,
+        "1": 235,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -157,7 +196,7 @@
         "1": 26
       },
       "flags": {},
-      "order": 0,
+      "order": 2,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -166,7 +205,8 @@
           "type": "attribute_t",
           "links": [
             14,
-            16
+            16,
+            18
           ]
         }
       ],
@@ -176,50 +216,11 @@
       }
     },
     {
-      "id": 5,
-      "type": "gfx/PipelineNode",
-      "pos": {
-        "0": -139,
-        "1": 32,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": {
-        "0": 140,
-        "1": 26
-      },
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "out",
-          "type": "pipeline_t",
-          "links": [
-            5,
-            11
-          ]
-        }
-      ],
-      "title": "Pipeline",
-      "properties": {
-        "vs": "test.vs.glsl",
-        "ps": "test.ps.glsl"
-      }
-    },
-    {
       "id": 4,
       "type": "gfx/PassNode",
       "pos": {
-        "0": 455,
-        "1": 52,
+        "0": 450,
+        "1": 7,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -231,10 +232,10 @@
       },
       "size": {
         "0": 210,
-        "1": 488
+        "1": 682
       },
       "flags": {},
-      "order": 4,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -252,9 +253,12 @@
         {
           "name": "rt#0",
           "type": "texture_t",
-          "links": [
-            8
-          ]
+          "links": null
+        },
+        {
+          "name": "rt#1",
+          "type": "texture_t",
+          "links": null
         },
         {
           "name": "depth",
@@ -265,16 +269,19 @@
       "title": "Pass",
       "properties": {
         "viewport": {
-          "width": 468.03427127911164,
+          "width": 512,
           "height": 512
         },
         "rts": [
           {
             "format": "RGBA_U8"
+          },
+          {
+            "format": "RGBA_U8"
           }
         ],
         "depth": {
-          "format": "D16"
+          "format": "D32"
         },
         "dc_cnt": 0
       }
@@ -306,14 +313,6 @@
       "pipeline_t"
     ],
     [
-      8,
-      4,
-      0,
-      8,
-      0,
-      "texture_t"
-    ],
-    [
       11,
       5,
       0,
@@ -336,16 +335,24 @@
       6,
       1,
       "attribute_t"
+    ],
+    [
+      18,
+      9,
+      0,
+      7,
+      2,
+      "attribute_t"
     ]
   ],
   "groups": [],
   "config": {
     "srcs": {
       "test.vs.glsl": {
-        "code": "#version 300 es\nlayout (location=0) in vec2 position;\nlayout (location=1) in vec3 color;\n\nvoid main() {\n\n    gl_Position = vec4(color.xy + position, 0.0, 1.0);\n}"
+        "code": "#version 300 es\nlayout (location=0) in vec2 position;\nlayout (location=1) in vec3 color;\nuniform mat4 my_uniform;\nuniform uint a;\n\nvoid main() {\n\n    gl_Position = vec4(color.xy + position, -1.0, 1.0);\n    \n}"
       },
       "test.ps.glsl": {
-        "code": "#version 300 es\nprecision highp float;\nout vec4 fragColor;\nvoid main() {\n    fragColor = vec4(1.0, 0.0, 0.0, 1.0);\n}"
+        "code": "#version 300 es\nprecision highp float;\nlayout (location=0) out vec4 fragColor;\nlayout (location=1) out vec4 fragColor1;\nvoid main() {\n    fragColor = vec4(1.0, 1.0, 0.0, 1.0);\n    fragColor1 = vec4(1.0, 0.0, 0.0, 1.0);\n    //gl_FragDepth = 1.0;\n}"
       },
       "triangle_pos": {
         "code": "{\n    \"attributes\": {\n        \"position\": {\n            \"data\": [\n                -1.0, -1.0,\n                0.0, 1.0,\n                1.0, -1.0\n                ],\n                \"type\": \"vec2\"\n        },\n        \"color\": {\n            \"data\": [\n                1.0, 1.0, 0.0,\n                0.0, 1.0, 0.0,\n                1.0, 1.0, 0.0\n                ],\n                \"type\": \"vec3\"\n        }\n    }\n}\n"
