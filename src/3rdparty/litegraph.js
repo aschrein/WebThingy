@@ -2615,7 +2615,28 @@ supported callbacks:
     if (slot < 0)
         return null;
     return this.getInputNode(slot);
-};
+    };
+
+    LGraphNode.prototype.getInputLinkByName = function(name) {
+        let slot = this.findInputSlot(name);
+        if (slot < 0)
+            return null;
+        if (!this.inputs) {
+            return null;
+        }
+        if (slot >= this.inputs.length) {
+            return null;
+        }
+        var input = this.inputs[slot];
+        if (!input || input.link === null) {
+            return null;
+        }
+        var link_info = this.graph.links[input.link];
+        if (!link_info) {
+            return null;
+        }
+        return link_info;
+    };
 
   /**
    * returns the value of an input with this name, otherwise checks if there is a property with that name

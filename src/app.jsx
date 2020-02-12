@@ -12,6 +12,11 @@ import * as dat from 'dat.gui';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { vec2, vec3, vec4, mat2, mat3, mat4, quat } from 'gl-matrix';
 import { Modal, Button, FormControl } from 'react-bootstrap';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+import { RoughnessMipmapper } from 'three/examples/jsm/utils/RoughnessMipmapper.js';
 
 var LG = require('./3rdparty/litegraph');
 let LGraph = LG.LGraph;
@@ -106,6 +111,14 @@ global_state.on_reset = (fn) => {
 global_state.exec_reset = () => {
   global_state.litegraph.clear();
   global_state.litegraph.config.srcs = {};
+  for (let i in global_state._on_reset_table) {
+    global_state._on_reset_table[i]();
+  }
+};
+global_state.reload = () => {
+  let json = global_state.litegraph.serialize();
+  global_state.exec_reset();
+  global_state.litegraph.configure(json, false);
   for (let i in global_state._on_reset_table) {
     global_state._on_reset_table[i]();
   }
@@ -419,17 +432,19 @@ global_state.update = () => {
 };
 global_state.periodic_update = setInterval(global_state.update, 1000);
 // TODO:
-// * src node/pipeline node
 // * drawcall node
 //   * input attribute stream
+//      * per vertex/instance
 //   * input uniform hvalues(matrices, vector, float, ints, textures+texture sizes)
-// * camera node(generates look,up,left vectors and view/projection/inverse matrices)
-// * text code editing
-//   * live update
-// * pass node
-//   * multiple drawcalls as inputs
-//   * multiple output render targets
-//   * live view render targets(configure custom visualization text)
+// * value nodes
+//   * camera node(generates look,up,left vectors and view/projection/inverse matrices)
+// * update propagation?
+
+var gltf_loader = new GLTFLoader();
+
+// class Mesh {
+
+// }
 
 class MyLGraphNode extends LGraphNode {
   constructor() {
@@ -437,6 +452,254 @@ class MyLGraphNode extends LGraphNode {
   }
   set_dirty = () => { global_state.set_dirty(this); }
   onConfigure = () => { if (this.update) this.set_dirty(); }
+  clean_inputs = () => {
+    let len = this.inputs.length;
+    for (let i = len - 1; i >= 0; i--) {
+      this.removeInput(i);
+    }
+  }
+  clean_outputs = () => {
+    let len = this.outputs.length;
+    for (let i = len - 1; i >= 0; i--) {
+      this.removeOutput(i);
+    }
+  }
+  onRemoved = () => {
+    global_state._dirty_set.delete(this);
+  }
+  set_inputs = (new_outputs) => {
+    let last_attributes = new Set();
+    this.inputs.forEach(input => last_attributes.add(input.type + " " + input.name));
+    if (!isSetsEqual(last_attributes, new_outputs)) {
+      last_attributes.forEach(attr => { if (!new_outputs.has(attr)) { this.removeInputByName(attr.split(" ")[1]) } });
+      new_outputs.forEach(attr => {
+        if (!last_attributes.has(attr)) {
+          this.addInput(attr.split(" ")[1], attr.split(" ")[0])
+        }
+      });
+    }
+  }
+  set_outputs = (new_outputs) => {
+    let last_attributes = new Set();
+    this.outputs.forEach(input => last_attributes.add(input.type + " " + input.name));
+    if (!isSetsEqual(last_attributes, new_outputs)) {
+      last_attributes.forEach(attr => { if (!new_outputs.has(attr)) { this.removeOutputByName(attr.split(" ")[1]) } });
+      new_outputs.forEach(attr => {
+        if (!last_attributes.has(attr)) {
+          this.addOutput(attr.split(" ")[1], attr.split(" ")[0])
+        }
+      });
+    }
+  }
+}
+
+class ModelNode extends MyLGraphNode {
+  constructor() {
+    super();
+    this.title = "Model";
+    this.properties = {
+      fileurl: null,
+    };
+    this.onPropertyChange = (prop, val) => {
+      if (prop == "fileurl") {
+
+      }
+    };
+    let url = 'models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf';
+    gltf_loader.load(url, (gltf) => {
+
+      this.gltf = gltf;
+      // this.meshes = [];
+      // gltf.scene.children.forEach(raw_mesh => {
+      // let mesh = new Mesh();
+      // this.init(raw_mesh);
+
+      // this.meshes.push(mesh);
+      // });
+      this.init(gltf.scene.children[0]);
+      // this.clean_outputs();
+      let new_outputs = new Set();
+      Object.keys(this.attributes).forEach(attr_name => {
+        new_outputs.add("attribute_t " + attr_name);
+      });
+      if (this.indices)
+        new_outputs.add("indices_t indices");
+      this.set_outputs(new_outputs);
+    });
+    this.yoffset = 0;
+  }
+
+  init = (mesh) => {
+    assert(mesh.type == "Mesh");
+    this.attributes = {};
+    Object.keys(mesh.geometry.attributes).forEach(attr_name => {
+      let raw_attr = mesh.geometry.attributes[attr_name];
+      let attr = {};
+      attr.data = raw_attr.array;
+      assert(raw_attr.normalized == false);
+      switch (raw_attr.itemSize) {
+        case 1: attr.type = "float"; break;
+        case 2: attr.type = "vec2"; break;
+        case 3: attr.type = "vec3"; break;
+        case 4: attr.type = "vec4"; break;
+        default: throw Error();
+      }
+      this.attributes[attr_name] = attr;
+    });
+    this.indices = {};
+    this.indices.data = mesh.geometry.index.array;
+    this.indices.type = "uint16";
+    this.pbr_material = mesh.material;
+    this.images = [];
+    Object.keys(this.pbr_material).forEach(field => {
+      if (
+        this.pbr_material[field] &&
+        typeof (this.pbr_material[field]) == "object" &&
+        "image" in this.pbr_material[field]) {
+        this.images.push({ name: field, img: this.pbr_material[field].image });
+      }
+    });
+    // console.log(mesh.geometry);
+  }
+
+  get_buffer = () => {
+    return this;
+  }
+
+  get_attrib = (slot) => {
+    let name = this.outputs[slot].name;
+    return this.attributes[name];
+  }
+
+  onDrawBackground(ctx) {
+    if (this.flags.collapsed) {
+      return;
+    }
+    // if (!this.meshes)
+    //   return;
+    // ctx.fillStyle = "#000";
+
+    // var yoffset = this.yoffset;
+    // var xoffset = 16;
+    // var border = 16;
+    // var size = this.size[0] - border * 2;
+    // Object.keys(this.scene.pbr_material).forEach(field => {
+    //   // console.log(typeof(this.scene.pbr_material[field]));
+    //   if (
+    //     this.scene.pbr_material[field] &&
+    //     typeof (this.scene.pbr_material[field]) == "object" &&
+    //     "image" in this.scene.pbr_material[field]) {
+    //     ctx.drawImage(
+    //       this.scene.pbr_material[field].image
+    //       , xoffset, yoffset, size, size);
+    //     yoffset += size + border;
+    //   }
+    // });
+
+    // yoffset += size + border;
+    // // this.size[0] = xoffset + size + border;
+    // this.size[1] = yoffset;
+    // // ctx.fillRect(0, 0, size[0], size[1]);
+    // ctx.strokeStyle = "#555";
+
+
+  }
+
+  display = (propnode) => {
+    var canvas1 = document.createElement("canvas");
+    var canvas2 = document.createElement("canvas");
+    var div = document.createElement("div");
+    div.appendChild(canvas1);
+    {
+      var context = canvas1.getContext('webgl2', { alpha: false });
+      var renderer = new THREE.WebGLRenderer({ canvas: canvas1, context: context });
+      var controls;
+      var camera, scene;
+      camera = new THREE.PerspectiveCamera(45, 1.0, 0.25, 20);
+      camera.position.set(- 1.8, 0.6, 2.7);
+
+      scene = new THREE.Scene();
+      var render = function () {
+        renderer.render(scene, camera);
+      };
+      new RGBELoader()
+        .setDataType(THREE.UnsignedByteType)
+        .setPath('textures/equirectangular/')
+        .load('venice_sunset_1k.hdr', (texture) => {
+
+          var envMap = pmremGenerator.fromEquirectangular(texture).texture;
+
+          scene.background = envMap;
+          scene.environment = envMap;
+
+          texture.dispose();
+          pmremGenerator.dispose();
+
+          render();
+
+
+          scene.add(this.gltf.scene);
+
+
+          render();
+
+        });
+
+      renderer.setPixelRatio(1.0);
+      renderer.setSize(256, 256);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+
+
+      var pmremGenerator = new THREE.PMREMGenerator(renderer);
+      pmremGenerator.compileEquirectangularShader();
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.addEventListener('change', render);
+      controls.minDistance = 2;
+      controls.maxDistance = 20
+      controls.target.set(0, 0, - 0.2);
+      controls.update();
+      camera.aspect = 1.0;
+      camera.updateProjectionMatrix();
+
+
+      renderer.render(scene, camera);
+    }
+    div.appendChild(canvas2);
+    propnode.datgui = {};
+    propnode.datgui.domElement = div;
+    div.width = 256;
+    {
+      let ctx = canvas2.getContext("2d");
+      var yoffset = 0;
+      var xoffset = 128;
+      var border = 16;
+      var size = 128;
+      canvas2.width = xoffset + size;
+      var height = 0;
+      var images = [];
+      Object.keys(this.pbr_material).forEach(field => {
+        if (
+          this.pbr_material[field] &&
+          typeof (this.pbr_material[field]) == "object" &&
+          "image" in this.pbr_material[field]) {
+          images.push({ name: field, img: this.pbr_material[field].image });
+          height += size + border;
+        }
+      });
+      canvas2.height = height;
+      div.height = height + 256;
+
+      images.forEach(img => {
+        ctx.fillStyle = "white";
+        ctx.fillText(img.name, 0, yoffset + 16);
+        ctx.drawImage(
+          img.img
+          , xoffset, yoffset, size, size);
+        yoffset += size + border;
+      });
+    }
+  }
 }
 
 class GLComponent extends React.Component {
@@ -630,6 +893,9 @@ class PipelineNode extends MyLGraphNode {
   parse_shaders() {
     this.clean_inputs();
     this.attributes = [];
+    let uniform_set = new Set();
+    this.uniforms = [];
+
     if (this.properties.vs != null) {
       try {
         // Parse vertex shader for attributes
@@ -642,13 +908,33 @@ class PipelineNode extends MyLGraphNode {
           let attrib = json.attributes[i];
           this.attributes.push({ name: attrib.name, type: attrib.type });
         }
+        for (var i = 0; i < json.uniforms.length - 1; i++) {
+          let uniform = json.uniforms[i];
+          if (uniform_set.has(uniform.name))
+            continue;
+          uniform_set.add(uniform.name);
+          this.uniforms.push({ name: uniform.name, uniform: uniform.type });
+        }
+        // ps uniform parsing
+        {
+          let str = window.glslang.parse_attributes(global_state.get_src(this.properties.ps), "fragment");
+          let json = JSON.parse(str);
+          console.log(str);
+          for (var i = 0; i < json.uniforms.length - 1; i++) {
+            let uniform = json.uniforms[i];
+            if (uniform_set.has(uniform.name))
+              continue;
+            uniform_set.add(uniform.name);
+            this.uniforms.push({ name: uniform.name, uniform: uniform.type });
+          }
+        }
       } catch (e) {
         console.log(e);
         return null;
       }
     }
     // console.log(this.attributes);
-    return this.attributes;
+    return { attributes: this.attributes, uniforms: this.uniforms };
   }
 
   onSelected() {
@@ -662,7 +948,6 @@ class PipelineNode extends MyLGraphNode {
 class VertexBufferNode extends MyLGraphNode {
   constructor() {
     super();
-    this.addOutput("out", "attribute_t");
     this.title = "Vertex Buffer";
     this.properties = {
       src: null
@@ -705,21 +990,37 @@ class VertexBufferNode extends MyLGraphNode {
     return this.buf;
   }
 
+  get_attrib = (slot) => {
+    let name = this.outputs[slot].name;
+    return this.buf.attributes[name];
+  }
+
   parse_src = () => {
+    // this.clean_outputs();
     if (!this.properties.src)
       return;
     let text = global_state.get_src(this.properties.src);
     if (!text)
-      return {};
-    let json = JSON.parse(text);
-    assert(json);
-    // Json we're looking for has a certain scheme:
-    // {attributes:{name:{data:, type}}}
-    assert(json.attributes);
-    for (let i in json.attributes)
-      assert(json.attributes[i].data);
-    // json.attributes.forEach(attribute => {});
-    this.buf = json;
+      return;
+    try {
+      let json = JSON.parse(text);
+      assert(json);
+      // Json we're looking for has a certain scheme:
+      // {attributes:{name:{data:, type}}}
+      assert(json.attributes);
+      let new_outputs =  new Set();
+      for (let i in json.attributes) {
+        new_outputs.add("attribute_t " + i);
+        assert(json.attributes[i].data);
+      }
+      if ("indices" in json)
+        new_outputs.add("indices_t indices");
+      // json.attributes.forEach(attribute => {});
+      this.buf = json;
+    } catch (e) {
+      console.log(e);
+      this.buf = {};
+    }
   }
 
   update = () => {
@@ -732,6 +1033,7 @@ class DrawCallNode extends MyLGraphNode {
     super();
     this.addOutput("out", "drawcall_t");
     this.addInput("pipeline", "pipeline_t");
+    this.addInput("indices", "indices_t");
     this.title = "Draw Call";
 
     this.onConnectionsChange = (c_type, target_slot, flag, link_info, input) => {
@@ -741,7 +1043,6 @@ class DrawCallNode extends MyLGraphNode {
       // return false;
       // }
     };
-    this.last_attributes = new Set();
     // this.onConnectInput = (target_slot, output_type, output) => {
     //   if (output_type == "pipeline_t") {
     //     return true;
@@ -753,26 +1054,23 @@ class DrawCallNode extends MyLGraphNode {
   }
 
   update_inputs = () => {
-
     let pipeline = this.getInputNodeByName("pipeline");
     var sat = new Set();
     this.attributes = [];
+    this.uniforms = [];
     if (pipeline) {
-      this.attributes = pipeline.parse_shaders();
-      if (!this.attributes)
+      let pipeline_info = pipeline.parse_shaders();
+      if (!pipeline_info)
         return;
-      this.attributes.forEach(a => sat.add(a.name));
+      this.attributes = pipeline_info.attributes;
+      this.uniforms = pipeline_info.uniforms;
+      this.attributes.forEach(a => sat.add("attribute_t " + a.name));
+      this.uniforms.forEach(a => sat.add("uniform_t " + a.name));
+
     }
-    this.last_attributes.clear();
-    this.inputs.forEach(input => this.last_attributes.add(input.name));
-    this.last_attributes.delete("pipeline");
-    if (!isSetsEqual(this.last_attributes, sat)) {
-      this.last_attributes.forEach(attr => { if (!sat.has(attr)) { this.removeInputByName(attr) } });
-      sat.forEach(attr => { if (!this.last_attributes.has(attr)) { this.addInput(attr, "attribute_t") } });
-      // for (var i = this.inputs.length - 1; i > 0; i--)
-      //   this.removeInput(i);
-      // attributes.forEach(k => this.addInput(k.name, "attribute_t"));
-    }
+    sat.add("pipeline_t pipeline");
+    sat.add("indices_t indices");
+    this.set_inputs(sat);
   }
 
   draw = (gl) => {
@@ -788,9 +1086,12 @@ class DrawCallNode extends MyLGraphNode {
       let input = this.getInputNodeByName(attrib.name);
       if (!input)
         continue;
+      let input_link = this.getInputLinkByName(attrib.name);
+      let out_attrib = input.get_attrib(input_link.origin_slot);
+      assert(out_attrib.type == attrib.type);
+      
       let buf = input.get_buffer();
-      assert(attrib.name in buf.attributes && "data" in buf.attributes[attrib.name]);
-      let data = buf.attributes[attrib.name].data;
+      let data = out_attrib.data;
       let arr = new Float32Array(data);
 
       var gl_buffer = gl.createBuffer();
@@ -798,7 +1099,6 @@ class DrawCallNode extends MyLGraphNode {
       gl.bindBuffer(gl.ARRAY_BUFFER, gl_buffer);
       gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
       let loc = pipeline.get_attrib_location(gl, attrib.name);
-      console.log(attrib.name + " at " + loc);
       var comps = -1;
       switch (attrib.type) {
         case "vec2":
@@ -813,7 +1113,28 @@ class DrawCallNode extends MyLGraphNode {
       gl.vertexAttribPointer(loc, comps, gl.FLOAT, false, 0, 0);
       gl.enableVertexAttribArray(loc);
     }
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    let draw_size = 3;
+    {
+      let input = this.getInputNodeByName("indices");
+      if (input) {
+        let buf = input.get_buffer();
+        assert("indices" in buf && "data" in buf["indices"]);
+
+        const indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl_buffers.push(indexBuffer);
+        assert(buf.indices.type == "uint16");
+        gl.bufferData(
+          gl.ELEMENT_ARRAY_BUFFER,
+          new Uint16Array(buf.indices.data),
+          gl.STATIC_DRAW
+        );
+        draw_size = buf.indices.data.length;
+      }
+    }
+    var indexType = gl.UNSIGNED_SHORT;
+    gl.drawElements(gl.TRIANGLES, draw_size, indexType, 0);
+    // gl.drawArrays(gl.TRIANGLES, 0, draw_size);
     gl_buffers.forEach(buf => gl.deleteBuffer(buf));
     gl.deleteVertexArray(glarr);
     pipeline.release(gl);
@@ -1224,6 +1545,7 @@ class GraphNodeComponent extends React.Component {
     LiteGraph.registerNodeType("gfx/DrawCallNode", DrawCallNode);
     LiteGraph.registerNodeType("gfx/PipelineNode", PipelineNode);
     LiteGraph.registerNodeType("gfx/VertexBufferNode", VertexBufferNode);
+    LiteGraph.registerNodeType("gfx/ModelNode", ModelNode);
     // Load default json scene
     init_litegraph(require('./default_graph.json'));
     // this.dumpJson();
@@ -1256,6 +1578,9 @@ class GraphNodeComponent extends React.Component {
         <Button style={{ margin: 10 }} onClick={() => { global_state.update(); }}>
           force update
                 </Button>
+         <Button style={{ margin: 10 }} onClick={() => { global_state.reload(); }}>
+          force reload
+                </Button>     
         <canvas id='tmp_canvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
       </div>
     );
@@ -1556,6 +1881,7 @@ class GoldenLayoutWrapper extends React.Component {
     layout.registerComponent('PropertiesNode',
       PropertiesNode
     );
+
     layout.init();
     window.React = React;
     window.ReactDOM = ReactDOM;
