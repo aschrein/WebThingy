@@ -11,7 +11,7 @@ import { JSONEditor } from 'react-json-editor-viewer';
 import * as dat from 'dat.gui';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { vec2, vec3, vec4, mat2, mat3, mat4, quat } from 'gl-matrix';
-import { Modal, Button, FormControl } from 'react-bootstrap';
+import { Modal, Button, FormControl, Dropdown, DropdownButton } from 'react-bootstrap';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -238,7 +238,7 @@ global_state.draw_triangle = (gl) => {
   gl.deleteShader(fragmentShader);
   gl.deleteProgram(program);
 };
-global_state.render_texture = (tex) => {
+global_state.render_texture = (tex, format) => {
   let gl = global_state.gl;
   var pipeline = {
     vs:
@@ -255,14 +255,30 @@ global_state.render_texture = (tex) => {
     ps:
       `#version 300 es
       precision highp float;
+      precision highp int;
+      precision highp usampler2D;
+      precision highp isampler2D;
       in vec2 uv;
       uniform sampler2D in_tex;
       out vec4 fragColor;
       void main() {
-        fragColor = vec4(texture(in_tex, uv).xyz, 1.0);
+        fragColor = vec4(vec3(texture(in_tex, uv).xyz), 1.0);
       }`,
 
   };
+  if (format) {
+    switch (format) {
+      case "RGBA32UI": {
+        pipeline.ps = pipeline.ps.replace("uniform sampler2D", "uniform usampler2D");
+      }
+        break;
+      case "RGBA32F": {
+      }
+        break;
+      default:
+        throw Error("unknown format");
+    }
+  }
   var vsSource = pipeline.vs;
   var fsSource = pipeline.ps;
 
@@ -316,7 +332,7 @@ global_state.render_texture = (tex) => {
   gl.deleteProgram(program);
   gl.deleteVertexArray(triangleArray);
 };
-global_state.get_texture_data = (tex) => {
+global_state.get_texture_data = (tex, format) => {
   let gl = global_state.gl;
   // create to render to
   const targetTextureWidth = 256;
@@ -361,7 +377,7 @@ global_state.get_texture_data = (tex) => {
   gl.clearColor(0, 0, 1, 1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  global_state.render_texture(tex);
+  global_state.render_texture(tex, format);
 
   var data = new Uint8Array(targetTextureWidth * targetTextureHeight * 4);
   gl.readPixels(0, 0, targetTextureWidth, targetTextureHeight, gl.RGBA, gl.UNSIGNED_BYTE, data);
@@ -440,11 +456,62 @@ global_state.periodic_update = setInterval(global_state.update, 1000);
 //   * camera node(generates look,up,left vectors and view/projection/inverse matrices)
 // * update propagation?
 
+let graph_list = ['default_graph.json', 'ltc.json'];
+
+class LoadGraphButton extends React.Component {
+  constructor(props, context) {
+    super(props, context);
+    this.state = { visible: false };
+    this.myInput = { value: "" };
+  }
+  setShow = (vis) => {
+    this.setState({ visible: vis });
+  }
+  handleClose = () => this.setShow(false);
+  handleShow = () => this.setShow(true);
+  handleApply = () => {
+    // console.log(this.myInput.value);
+    this.props.on_submit(this.myInput.value);
+    this.setShow(false);
+  }
+  render() {
+    return (
+      <>
+        <Button variant="primary" onClick={this.handleShow}>
+          Load Graph
+      </Button>
+
+        <Modal show={this.state.visible} onHide={this.handleClose}>
+          <Modal.Header closeButton>
+            <Modal.Title>Choose source</Modal.Title>
+          </Modal.Header>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={this.handleClose}>
+              Cancel
+          </Button>
+            <DropdownButton id="dropdown-item-button" title="Dropdown button">
+              {graph_list.map(
+                variant => (
+                  <Dropdown.Item onClick={() => {
+                    fetch(variant)
+                      .then(response => response.text())
+                      .then(text => {
+                        init_litegraph(JSON.parse(text));
+                      });
+
+                  }}>{variant}</Dropdown.Item>
+                ),
+              )}
+
+            </DropdownButton>
+          </Modal.Footer>
+        </Modal>
+      </>
+    );
+  }
+}
+
 var gltf_loader = new GLTFLoader();
-
-// class Mesh {
-
-// }
 
 class MyLGraphNode extends LGraphNode {
   constructor() {
@@ -716,7 +783,11 @@ class GLComponent extends React.Component {
 
     // return;
     let gl = this.gl;
-    assert(gl.getExtension('EXT_color_buffer_float') != null);
+    const ext = gl.getExtension('EXT_color_buffer_float');
+    if (!ext) {
+      return alert('need EXT_color_buffer_float');
+    }
+    console.log(ext);
     let canvas = this.canvas;
     global_state.gl = gl;
     global_state.draw_triangle(gl);
@@ -804,6 +875,10 @@ class PipelineNode extends MyLGraphNode {
 
   is_valid = () => {
     return this.properties.vs != null && this.properties.ps != null;
+  }
+
+  get_uniform_location = (gl, name) => {
+    return gl.getUniformLocation(this.gl.program, name);
   }
 
   bind = (gl) => {
@@ -903,7 +978,7 @@ class PipelineNode extends MyLGraphNode {
           throw Error("glslang is not ready");
         let str = window.glslang.parse_attributes(global_state.get_src(this.properties.vs), "vertex");
         let json = JSON.parse(str);
-        console.log(str);
+        // console.log(str);
         for (var i = 0; i < json.attributes.length - 1; i++) {
           let attrib = json.attributes[i];
           this.attributes.push({ name: attrib.name, type: attrib.type });
@@ -913,19 +988,19 @@ class PipelineNode extends MyLGraphNode {
           if (uniform_set.has(uniform.name))
             continue;
           uniform_set.add(uniform.name);
-          this.uniforms.push({ name: uniform.name, uniform: uniform.type });
+          this.uniforms.push({ name: uniform.name, type: uniform.type });
         }
         // ps uniform parsing
         {
           let str = window.glslang.parse_attributes(global_state.get_src(this.properties.ps), "fragment");
           let json = JSON.parse(str);
-          console.log(str);
+          // console.log(str);
           for (var i = 0; i < json.uniforms.length - 1; i++) {
             let uniform = json.uniforms[i];
             if (uniform_set.has(uniform.name))
               continue;
             uniform_set.add(uniform.name);
-            this.uniforms.push({ name: uniform.name, uniform: uniform.type });
+            this.uniforms.push({ name: uniform.name, type: uniform.type });
           }
         }
       } catch (e) {
@@ -955,6 +1030,11 @@ class VertexBufferNode extends MyLGraphNode {
     global_state.on_src_change((src_name) => {
       if (src_name == this.properties.src) {
         this.set_dirty();
+      }
+    });
+    global_state.exec_after('remove_src', (cmd) => {
+      if (cmd.src_name == this.properties.src) {
+        this.set_src(null);
       }
     });
     this.buf = { attributes: {} };
@@ -996,26 +1076,28 @@ class VertexBufferNode extends MyLGraphNode {
   }
 
   parse_src = () => {
-    // this.clean_outputs();
-    if (!this.properties.src)
+    if (!this.properties.src) {
+      this.clean_outputs();
       return;
+    }
     let text = global_state.get_src(this.properties.src);
-    if (!text)
+    if (!text) {
+      this.properties.src = null;
+      this.clean_outputs();
       return;
+    }
     try {
       let json = JSON.parse(text);
       assert(json);
-      // Json we're looking for has a certain scheme:
-      // {attributes:{name:{data:, type}}}
       assert(json.attributes);
-      let new_outputs =  new Set();
+      let new_outputs = new Set();
       for (let i in json.attributes) {
         new_outputs.add("attribute_t " + i);
         assert(json.attributes[i].data);
       }
       if ("indices" in json)
         new_outputs.add("indices_t indices");
-      // json.attributes.forEach(attribute => {});
+      this.set_outputs(new_outputs);
       this.buf = json;
     } catch (e) {
       console.log(e);
@@ -1026,6 +1108,177 @@ class VertexBufferNode extends MyLGraphNode {
   update = () => {
     this.parse_src();
   }
+}
+
+class TextureBufferNode extends MyLGraphNode {
+  constructor() {
+    super();
+    this.title = "Texture Buffer";
+    this.properties = {
+      src: null
+    };
+    this.properties = {
+      src: null
+    };
+    global_state.on_src_change((src_name) => {
+      if (src_name == this.properties.src) {
+        this.set_dirty();
+      }
+    });
+    global_state.exec_after('remove_src', (cmd) => {
+      if (cmd.src_name == this.properties.src) {
+        this.set_src(null);
+      }
+    });
+    this.buf = {};
+    this.thumbnail = null;
+    this.set_dirty();
+  }
+
+  display = (propnode) => {
+    let src_list = [];
+    let datgui_state = {
+      src: this.properties.src,
+    };
+    Object.keys(global_state.litegraph.config.srcs).forEach(e => src_list.push(e));
+    propnode.datgui.add(datgui_state, 'src', src_list)
+      .onChange((v) => this.set_src(v));
+  }
+
+  set_src = (name) => {
+    this.properties.src = name;
+    this.set_dirty();
+  }
+
+  get_buffer = (slot) => {
+    return this.buf;
+  }
+
+  parse_src = () => {
+    if (!this.properties.src) {
+      this.clean_outputs();
+      return;
+    }
+    let text = global_state.get_src(this.properties.src);
+    if (!text) {
+      this.properties.src = null;
+      this.clean_outputs();
+      return;
+    }
+    try {
+      let json = JSON.parse(text);
+      assert(json);
+      assert(json.data && json.format && json.width && json.height);
+      let new_outputs = new Set();
+      new_outputs.add("uniform_t texture");
+      this.set_outputs(new_outputs);
+      this.buf = json;
+    } catch (e) {
+      console.error("Error while parsing json");
+      console.error(e);
+    }
+  }
+
+  bind = (gl, loc) => {
+    var texture = gl.createTexture();
+    this.gl = {};
+    this.gl.texture = texture;
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+
+    const level = 0;
+    var internalFormat = gl.RGBA32F;
+    const width = this.buf.width;
+    const height = this.buf.height;
+    const border = 0;
+    var format = gl.RGBA;
+    var type = gl.FLOAT;
+    var data = null;
+    switch (this.buf.format) {
+      case "RGBA32F": {
+        type = gl.FLOAT;
+        internalFormat = gl.RGBA32F;
+        format = gl.RGBA;
+        data = new Float32Array(this.buf.data);
+      }
+        break;
+      case "RGBA32UI": {
+        type = gl.UNSIGNED_INT;
+        internalFormat = gl.RGBA32UI;
+        format = gl.RGBA_INTEGER;
+        data = new Uint32Array(this.buf.data);
+      }
+        break;
+      default: throw Error('Unsupported format. Please add!');
+    };
+    // console.log(data);
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border,
+      format, type, data);
+
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_BASE_LEVEL, 0);
+    // gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAX_LEVEL, Math.log2(width));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // gl.generateMipmap(gl.TEXTURE_2D);
+
+    gl.activeTexture(gl.TEXTURE0 + 0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(loc, 0);
+  }
+
+  release = (gl) => {
+    if (this.gl && this.gl.texture)
+      gl.deleteTexture(this.gl.texture);
+    delete this.gl;
+  }
+
+  update = () => {
+    this.parse_src();
+    this.update_thumbnails(global_state.gl);
+  }
+
+  update_thumbnails = (gl) => {
+    this.thumbnail = null;
+    if (!this.buf.data)
+      return;
+    this.bind(gl);
+    let image_data = global_state.get_texture_data(this.gl.texture, this.buf.format);
+    this.release(gl);
+    let tmp_canvas = document.createElement("canvas");
+    let tmp_canvasContext = tmp_canvas.getContext("2d");
+    tmp_canvas.width = image_data.width;
+    tmp_canvas.height = image_data.height;
+    tmp_canvasContext.putImageData(image_data, 0, 0);
+    var img = document.createElement("img");
+    img.src = tmp_canvas.toDataURL("image/png");
+    this.thumbnail = img;
+
+  }
+
+  onDrawBackground(ctx) {
+    if (this.flags.collapsed) {
+      return;
+    }
+
+    ctx.fillStyle = "#000";
+    var yoffset = 16;
+    var xoffset = 16;
+    var border = 16;
+    var size = this.size[0] - border * 2;
+    if (this.thumbnail) {
+      ctx.drawImage(this.thumbnail, xoffset, yoffset, size, size);
+    } else {
+      ctx.fillRect(xoffset, yoffset, size, size);
+    }
+    // this.size[0] = xoffset + size + border;
+    this.size[1] = size + border * 2;
+    // ctx.fillRect(0, 0, size[0], size[1]);
+    ctx.strokeStyle = "#555";
+
+
+  }
+
 }
 
 class DrawCallNode extends MyLGraphNode {
@@ -1078,6 +1331,21 @@ class DrawCallNode extends MyLGraphNode {
     if (pipeline == null)
       return;
     pipeline.bind(gl);
+    let release_queue = [];
+    for (let i in this.uniforms) {
+      let uni = this.uniforms[i];
+      let input = this.getInputNodeByName(uni.name);
+      if (!input)
+        continue;
+      let input_link = this.getInputLinkByName(uni.name);
+      if (uni.type == "texture") {
+        // let texture = input.get_texture(input_link.origin_slot);
+        input.bind(gl, pipeline.get_uniform_location(gl, uni.name));
+        release_queue.push(() => input.release(gl));
+      } else {
+
+      }
+    }
     var glarr = gl.createVertexArray();
     gl.bindVertexArray(glarr);
     let gl_buffers = [];
@@ -1089,7 +1357,7 @@ class DrawCallNode extends MyLGraphNode {
       let input_link = this.getInputLinkByName(attrib.name);
       let out_attrib = input.get_attrib(input_link.origin_slot);
       assert(out_attrib.type == attrib.type);
-      
+
       let buf = input.get_buffer();
       let data = out_attrib.data;
       let arr = new Float32Array(data);
@@ -1137,6 +1405,7 @@ class DrawCallNode extends MyLGraphNode {
     // gl.drawArrays(gl.TRIANGLES, 0, draw_size);
     gl_buffers.forEach(buf => gl.deleteBuffer(buf));
     gl.deleteVertexArray(glarr);
+    release_queue.forEach(fn => fn());
     pipeline.release(gl);
   }
 
@@ -1280,11 +1549,11 @@ class PassNode extends MyLGraphNode {
       var format = null;
       const level = 0;
       switch (rt.format) {
-        case "RGBA_U8": {
+        case "RGBA8": {
           format = gl.RGBA8;
         }
           break;
-        case "RGBA_F32": {
+        case "RGBA32F": {
           format = gl.RGBA32F;
         }
           break;
@@ -1367,7 +1636,7 @@ class PassNode extends MyLGraphNode {
   display = (propnode) => {
 
     let tmp_rt_state = {
-      format: "RGBA_U8",
+      format: "RGBA8",
     };
     let tmp_d_state = {
       format: "D16",
@@ -1412,7 +1681,7 @@ class PassNode extends MyLGraphNode {
     }
     rts.open();
     let new_rt = propnode.datgui.addFolder("Add render target");
-    new_rt.add(tmp_rt_state, 'format', ["RGBA_U8", "RGBA_F32"]);
+    new_rt.add(tmp_rt_state, 'format', ["RGBA8", "RGBA32F"]);
     new_rt.add(datgui_state, 'push');
     new_rt.add(datgui_state, 'pop');
     new_rt.open();
@@ -1546,9 +1815,13 @@ class GraphNodeComponent extends React.Component {
     LiteGraph.registerNodeType("gfx/PipelineNode", PipelineNode);
     LiteGraph.registerNodeType("gfx/VertexBufferNode", VertexBufferNode);
     LiteGraph.registerNodeType("gfx/ModelNode", ModelNode);
+    LiteGraph.registerNodeType("gfx/TextureBufferNode", TextureBufferNode);
     // Load default json scene
-    init_litegraph(require('./default_graph.json'));
-    // this.dumpJson();
+    fetch('default_graph.json')
+      .then(response => response.text())
+      .then(text => {
+        init_litegraph(JSON.parse(text));
+      });
   }
 
   onResize() {
@@ -1557,8 +1830,35 @@ class GraphNodeComponent extends React.Component {
 
   dumpJson() {
     var json = this.graph.serialize();
-    console.log(JSON.stringify(json));
+    // console.log();
+    // https://stackoverflow.com/questions/400212/how-do-i-copy-to-the-clipboard-in-javascript?page=1&tab=votes#tab-top
+    function copyTextToClipboard(text) {
+      var textArea = document.createElement("textarea");
+      textArea.style.position = 'fixed';
+      textArea.style.top = 0;
+      textArea.style.left = 0;
+      textArea.style.width = '2em';
+      textArea.style.height = '2em';
+      textArea.style.padding = 0;
+      textArea.style.border = 'none';
+      textArea.style.outline = 'none';
+      textArea.style.boxShadow = 'none';
+      textArea.style.background = 'transparent';
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        var successful = document.execCommand('copy');
+        var msg = successful ? 'successful' : 'unsuccessful';
+        console.log('Copying text command was ' + msg);
+      } catch (err) {
+        console.log('Oops, unable to copy');
+      }
 
+      document.body.removeChild(textArea);
+    }
+    copyTextToClipboard(JSON.stringify(json));
 
   }
 
@@ -1567,7 +1867,7 @@ class GraphNodeComponent extends React.Component {
     return (
       <div style={{ width: '100%', height: '100%' }} id="tmp_canvas_container">
         <Button style={{ margin: 10 }} onClick={this.dumpJson}>
-          log json
+          Copy to clipboard
                 </Button>
         <Button style={{ margin: 10 }} onClick={() => { console.log(global_state.litegraph_canvas.selected_nodes); }}>
           log selection
@@ -1578,9 +1878,10 @@ class GraphNodeComponent extends React.Component {
         <Button style={{ margin: 10 }} onClick={() => { global_state.update(); }}>
           force update
                 </Button>
-         <Button style={{ margin: 10 }} onClick={() => { global_state.reload(); }}>
+        <Button style={{ margin: 10 }} onClick={() => { global_state.reload(); }}>
           force reload
-                </Button>     
+                </Button>
+        <LoadGraphButton />
         <canvas id='tmp_canvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
       </div>
     );
@@ -1888,24 +2189,6 @@ class GoldenLayoutWrapper extends React.Component {
     window.addEventListener('resize', () => {
       layout.updateSize();
     });
-
-    // var reader = new FileReader();
-
-    // reader.onload = function (theFile) {
-
-    // };
-
-    // reader.readAsDataURL('test.glsl');
-
-
-    // fetch('shaders/test.glsl')
-    //   .then(response => response.text())
-    //   .then(text => {
-    //     console.log(text);
-    //     var tokens = TokenString(text);
-    //     var ast = ParseTokens(tokens);
-    //     console.log(ast);
-    //   });
 
   }
 

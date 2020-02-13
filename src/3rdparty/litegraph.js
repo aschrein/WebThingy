@@ -3079,31 +3079,26 @@ supported callbacks:
   };
 
   LGraphNode.prototype.removeInputByName = function(name) {
-    let slot = -1;
-    for (var i = 0; i < this.inputs.length; ++i) {
-        if (this.inputs[i].name == name)
-            slot = i;
-    }
-    if (slot < 0)
-        return;
-    this.disconnectInput(slot);
-    this.inputs.splice(slot, 1);
-    for (var i = slot; i < this.inputs.length; ++i) {
-        if (!this.inputs[i]) {
-            continue;
+        let slot = -1;
+        for (var i = 0; i < this.inputs.length; ++i) {
+            if (this.inputs[i].name == name)
+                slot = i;
         }
-        var link = this.graph.links[this.inputs[i].link];
-        if (!link) {
-            continue;
+        if (slot < 0)
+            return;
+        this.removeInput(slot);
+    };
+
+    LGraphNode.prototype.removeOutputByName = function(name) {
+        let slot = -1;
+        for (var i = 0; i < this.inputs.length; ++i) {
+            if (this.inputs[i].name == name)
+                slot = i;
         }
-        link.target_slot -= 1;
-    }
-    this.size = this.computeSize();
-    if (this.onInputRemoved) {
-        this.onInputRemoved(slot);
-    }
-    this.setDirtyCanvas(true, true);
-};
+        if (slot < 0)
+            return;
+        this.removeOutput(slot);
+    };
 
   /**
    * add an special connection to this node (used for special kinds of graphs)
