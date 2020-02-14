@@ -635,13 +635,7 @@ class ModelNode extends MyLGraphNode {
       // });
       this.init(gltf.scene.children[0]);
       // this.clean_outputs();
-      let new_outputs = new Set();
-      Object.keys(this.attributes).forEach(attr_name => {
-        new_outputs.add("attribute_t " + attr_name);
-      });
-      if (this.indices)
-        new_outputs.add("indices_t indices");
-      this.set_outputs(new_outputs);
+      this.addOutput("mesh", "mesh_t");
     });
     this.yoffset = 0;
   }
@@ -679,13 +673,12 @@ class ModelNode extends MyLGraphNode {
     // console.log(mesh.geometry);
   }
 
-  get_buffer = () => {
-    return this;
+  get_attrib_data = (name) => {
+    return this.attributes[name];
   }
 
-  get_attrib = (slot) => {
-    let name = this.outputs[slot].name;
-    return this.attributes[name];
+  get_index_data = () => {
+    return this.indices;
   }
 
   onDrawBackground(ctx) {
@@ -1122,6 +1115,7 @@ class VertexBufferNode extends MyLGraphNode {
     });
     this.buf = { attributes: {} };
     this.set_dirty();
+    this.addOutput("mesh", "mesh_t");
   }
 
   display = (propnode) => {
@@ -1149,38 +1143,29 @@ class VertexBufferNode extends MyLGraphNode {
     this.set_dirty();
   }
 
-  get_buffer = () => {
-    return this.buf;
+  get_attrib_data = (name) => {
+    if (!(name in this.buf.attributes))
+      return null;
+    return this.buf.attributes[name];
   }
 
-  get_attrib = (slot) => {
-    let name = this.outputs[slot].name;
-    return this.buf.attributes[name];
+  get_index_data = () => {
+    return this.buf.indices;
   }
 
   parse_src = () => {
     if (!this.properties.src) {
-      this.clean_outputs();
       return;
     }
     let text = global_state.get_src(this.properties.src);
     if (!text) {
       this.properties.src = null;
-      this.clean_outputs();
       return;
     }
     try {
       let json = JSON.parse(text);
       assert(json);
       assert(json.attributes);
-      let new_outputs = new Set();
-      for (let i in json.attributes) {
-        new_outputs.add("attribute_t " + i);
-        assert(json.attributes[i].data);
-      }
-      if ("indices" in json)
-        new_outputs.add("indices_t indices");
-      this.set_outputs(new_outputs);
       this.buf = json;
     } catch (e) {
       console.log(e);
@@ -1370,7 +1355,7 @@ class DrawCallNode extends MyLGraphNode {
     super();
     this.addOutput("out", "drawcall_t");
     this.addInput("pipeline", "pipeline_t");
-    this.addInput("indices", "indices_t");
+    this.addInput("mesh", "mesh_t");
     this.title = "Draw Call";
     this.attributes = [];
     this.uniforms = [];
@@ -1401,7 +1386,7 @@ class DrawCallNode extends MyLGraphNode {
         return;
       this.attributes = pipeline_info.attributes;
       this.uniforms = pipeline_info.uniforms;
-      this.attributes.forEach(a => sat.add("attribute_t " + a.name));
+      // this.attributes.forEach(a => sat.add("attribute_t " + a.name));
       this.uniforms.forEach(a => sat.add("uniform_t " + a.name));
       if (this.properties.default_uniforms) {
         let to_remove = [];
@@ -1417,7 +1402,7 @@ class DrawCallNode extends MyLGraphNode {
       }
     }
     sat.add("pipeline_t pipeline");
-    sat.add("indices_t indices");
+    sat.add("mesh_t mesh");
     this.set_inputs(sat);
   }
 
@@ -1425,17 +1410,18 @@ class DrawCallNode extends MyLGraphNode {
     let pipeline = this.getInputNodeByName("pipeline");
     if (pipeline == null)
       return;
+    let mesh_input = this.getInputNodeByName("mesh");
+    if (!mesh_input)
+      return;
     this.gl = {};
     this.gl.arr = gl.createVertexArray();
     gl.bindVertexArray(this.gl.arr);
     this.gl.buffers = [];
     for (let i in this.attributes) {
       let attrib = this.attributes[i];
-      let input = this.getInputNodeByName(attrib.name);
-      if (!input)
+      let out_attrib = mesh_input.get_attrib_data(attrib.name);
+      if (!out_attrib)
         continue;
-      let input_link = this.getInputLinkByName(attrib.name);
-      let out_attrib = input.get_attrib(input_link.origin_slot);
       assert(out_attrib.type == attrib.type);
       let data = out_attrib.data;
       let arr = new Float32Array(data);
@@ -1461,22 +1447,20 @@ class DrawCallNode extends MyLGraphNode {
     }
     this.draw_size = 3;
     {
-      let input = this.getInputNodeByName("indices");
-      if (input) {
-        let buf = input.get_buffer();
-        assert("indices" in buf && "data" in buf["indices"]);
 
-        const indexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-        this.gl.buffers.push(indexBuffer);
-        assert(buf.indices.type == "uint16");
-        gl.bufferData(
-          gl.ELEMENT_ARRAY_BUFFER,
-          new Uint16Array(buf.indices.data),
-          gl.STATIC_DRAW
-        );
-        this.draw_size = buf.indices.data.length;
-      }
+      let buf = mesh_input.get_index_data();
+      assert("data" in buf);
+      const indexBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      this.gl.buffers.push(indexBuffer);
+      assert(buf.type == "uint16");
+      gl.bufferData(
+        gl.ELEMENT_ARRAY_BUFFER,
+        new Uint16Array(buf.data),
+        gl.STATIC_DRAW
+      );
+      this.draw_size = buf.data.length;
+
     }
     this.index_type = gl.UNSIGNED_SHORT;
   }
