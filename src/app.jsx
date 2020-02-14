@@ -864,7 +864,7 @@ class GLComponent extends React.Component {
 class BackBufferNode extends MyLGraphNode {
   constructor() {
     super();
-    this.addInput("in", "texture_t");
+    this.addInput("in", "uniform_t");
     this.properties = {};
     this.title = "Back Buffer";
     let list = global_state.litegraph.findNodesByType("gfx/BackBufferNode");
@@ -1628,10 +1628,10 @@ class PassNode extends MyLGraphNode {
   update_outputs = () => {
     this.clear_outputs();
     for (let i = 0; i < this.properties.rts.length; ++i) {
-      this.addOutput("rt#" + i, "texture_t");
+      this.addOutput("rt#" + i, "uniform_t");
     }
     if (this.properties.depth != null) {
-      this.addOutput("depth", "texture_t");
+      this.addOutput("depth", "uniform_t");
     }
   }
 

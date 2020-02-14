@@ -1,13 +1,290 @@
 {
-  "last_node_id": 16,
-  "last_link_id": 54,
+  "last_node_id": 17,
+  "last_link_id": 62,
   "nodes": [
+    {
+      "id": 5,
+      "type": "gfx/PipelineNode",
+      "pos": {
+        "0": 279,
+        "1": 245,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {
+        "collapsed": false
+      },
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "pipeline_t",
+          "links": [
+            40,
+            55
+          ]
+        }
+      ],
+      "title": "Pipeline",
+      "properties": {
+        "vs": "test.vs.glsl",
+        "ps": "test.ps.glsl"
+      }
+    },
+    {
+      "id": 11,
+      "type": "gfx/DrawCallNode",
+      "pos": {
+        "0": 549,
+        "1": 100,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 146
+      },
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipeline",
+          "type": "pipeline_t",
+          "link": 55
+        },
+        {
+          "name": "indices",
+          "type": "indices_t",
+          "link": 58
+        },
+        {
+          "name": "uv",
+          "type": "attribute_t",
+          "link": 57
+        },
+        {
+          "name": "position",
+          "type": "attribute_t",
+          "link": 56
+        },
+        {
+          "name": "my_uniform",
+          "type": "uniform_t",
+          "link": null
+        },
+        {
+          "name": "a",
+          "type": "uniform_t",
+          "link": null
+        },
+        {
+          "name": "albedo",
+          "type": "uniform_t",
+          "link": 60
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "drawcall_t",
+          "links": [
+            59
+          ]
+        }
+      ],
+      "title": "Draw Call",
+      "properties": {
+        "default_uniforms": {
+          "my_uniform": [
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "gfx/TextureBufferNode",
+      "pos": {
+        "0": 61,
+        "1": 329,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": [
+        140,
+        140
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "texture",
+          "type": "uniform_t",
+          "links": [
+            60
+          ]
+        }
+      ],
+      "title": "Texture Buffer",
+      "properties": {
+        "src": "test_texture"
+      }
+    },
+    {
+      "id": 8,
+      "type": "gfx/BackBufferNode",
+      "pos": {
+        "0": 1511,
+        "1": 53,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "in",
+          "type": "uniform_t",
+          "link": 45
+        }
+      ],
+      "outputs": [],
+      "title": "Back Buffer",
+      "properties": {}
+    },
+    {
+      "id": 15,
+      "type": "gfx/TextureBufferNode",
+      "pos": {
+        "0": 474,
+        "1": 519,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": [
+        140,
+        140
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "texture",
+          "type": "uniform_t",
+          "links": []
+        }
+      ],
+      "title": "Texture Buffer",
+      "properties": {
+        "src": "test_texture_uint"
+      }
+    },
+    {
+      "id": 17,
+      "type": "gfx/PassNode",
+      "pos": {
+        "0": 757,
+        "1": 301,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 210,
+        "1": 294
+      },
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "DC#0",
+          "type": "drawcall_t",
+          "link": 59
+        }
+      ],
+      "outputs": [
+        {
+          "name": "rt#0",
+          "type": "uniform_t",
+          "links": [
+            61
+          ]
+        }
+      ],
+      "title": "Pass",
+      "properties": {
+        "viewport": {
+          "width": 512,
+          "height": 512
+        },
+        "rts": [
+          {
+            "format": "RGBA8"
+          }
+        ],
+        "depth": null,
+        "dc_cnt": 1
+      }
+    },
     {
       "id": 4,
       "type": "gfx/PassNode",
       "pos": {
-        "0": 845,
-        "1": 128,
+        "0": 1190,
+        "1": 99,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -22,36 +299,36 @@
         "1": 682
       },
       "flags": {},
-      "order": 7,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
           "name": "DC#0",
           "type": "drawcall_t",
-          "link": null
+          "link": 62
         },
         {
           "name": "DC#1",
           "type": "drawcall_t",
-          "link": 54
+          "link": null
         }
       ],
       "outputs": [
         {
           "name": "rt#0",
-          "type": "texture_t",
+          "type": "uniform_t",
           "links": [
             45
           ]
         },
         {
           "name": "rt#1",
-          "type": "texture_t",
+          "type": "uniform_t",
           "links": null
         },
         {
           "name": "depth",
-          "type": "texture_t",
+          "type": "uniform_t",
           "links": null
         }
       ],
@@ -76,122 +353,11 @@
       }
     },
     {
-      "id": 8,
-      "type": "gfx/BackBufferNode",
-      "pos": {
-        "0": 1279,
-        "1": 183,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": {
-        "0": 140,
-        "1": 26
-      },
-      "flags": {},
-      "order": 8,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "in",
-          "type": "texture_t",
-          "link": 45
-        }
-      ],
-      "outputs": [],
-      "title": "Back Buffer",
-      "properties": {}
-    },
-    {
-      "id": 11,
-      "type": "gfx/DrawCallNode",
-      "pos": {
-        "0": 562,
-        "1": 78,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": {
-        "0": 140,
-        "1": 146
-      },
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "pipeline",
-          "type": "pipeline_t",
-          "link": 20
-        },
-        {
-          "name": "indices",
-          "type": "indices_t",
-          "link": 39
-        },
-        {
-          "name": "position",
-          "type": "attribute_t",
-          "link": 38
-        },
-        {
-          "name": "a",
-          "type": "uniform_t",
-          "link": null
-        },
-        {
-          "name": "uv",
-          "type": "attribute_t",
-          "link": 46
-        },
-        {
-          "name": "albedo",
-          "type": "uniform_t",
-          "link": 48
-        },
-        {
-          "name": "my_uniform",
-          "type": "uniform_t",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "out",
-          "type": "drawcall_t",
-          "links": [
-            54
-          ]
-        }
-      ],
-      "title": "Draw Call",
-      "properties": {
-        "default_uniforms": {
-          "my_uniform": [
-            0,
-            0
-          ]
-        }
-      }
-    },
-    {
       "id": 12,
       "type": "gfx/DrawCallNode",
       "pos": {
-        "0": 579,
-        "1": 293,
+        "0": 934,
+        "1": -158,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -206,7 +372,7 @@
         "1": 146
       },
       "flags": {},
-      "order": 6,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -237,7 +403,7 @@
         {
           "name": "albedo",
           "type": "uniform_t",
-          "link": 53
+          "link": 61
         },
         {
           "name": "my_uniform",
@@ -249,7 +415,9 @@
         {
           "name": "out",
           "type": "drawcall_t",
-          "links": []
+          "links": [
+            62
+          ]
         }
       ],
       "title": "Draw Call",
@@ -263,11 +431,70 @@
       }
     },
     {
+      "id": 9,
+      "type": "gfx/VertexBufferNode",
+      "pos": {
+        "0": 269,
+        "1": 411,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": [
+        140,
+        86
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "position",
+          "type": "attribute_t",
+          "links": [
+            41,
+            56
+          ]
+        },
+        {
+          "name": "color",
+          "type": "attribute_t",
+          "links": []
+        },
+        {
+          "name": "indices",
+          "type": "indices_t",
+          "links": [
+            43,
+            58
+          ]
+        },
+        {
+          "name": "uv",
+          "type": "attribute_t",
+          "links": [
+            50,
+            57
+          ]
+        }
+      ],
+      "title": "Vertex Buffer",
+      "properties": {
+        "src": "triangle_pos"
+      }
+    },
+    {
       "id": 10,
       "type": "gfx/ModelNode",
       "pos": {
-        "0": 196,
-        "1": 67,
+        "0": 204,
+        "1": 54,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -294,16 +521,12 @@
         {
           "name": "position",
           "type": "attribute_t",
-          "links": [
-            38
-          ]
+          "links": []
         },
         {
           "name": "uv",
           "type": "attribute_t",
-          "links": [
-            46
-          ]
+          "links": []
         },
         {
           "name": "uv2",
@@ -313,213 +536,16 @@
         {
           "name": "indices",
           "type": "indices_t",
-          "links": [
-            39
-          ]
+          "links": []
         }
       ],
       "title": "Model",
       "properties": {
         "fileurl": null
       }
-    },
-    {
-      "id": 9,
-      "type": "gfx/VertexBufferNode",
-      "pos": {
-        "0": 298,
-        "1": 343,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": [
-        140,
-        86
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "position",
-          "type": "attribute_t",
-          "links": [
-            41
-          ]
-        },
-        {
-          "name": "color",
-          "type": "attribute_t",
-          "links": []
-        },
-        {
-          "name": "indices",
-          "type": "indices_t",
-          "links": [
-            43
-          ]
-        },
-        {
-          "name": "uv",
-          "type": "attribute_t",
-          "links": [
-            50
-          ]
-        }
-      ],
-      "title": "Vertex Buffer",
-      "properties": {
-        "src": "triangle_pos"
-      }
-    },
-    {
-      "id": 15,
-      "type": "gfx/TextureBufferNode",
-      "pos": {
-        "0": 454,
-        "1": 570,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": [
-        140,
-        140
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "texture",
-          "type": "uniform_t",
-          "links": [
-            53
-          ]
-        }
-      ],
-      "title": "Texture Buffer",
-      "properties": {
-        "src": "test_texture_uint"
-      }
-    },
-    {
-      "id": 14,
-      "type": "gfx/TextureBufferNode",
-      "pos": {
-        "0": 61,
-        "1": 329,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": [
-        140,
-        140
-      ],
-      "flags": {},
-      "order": 3,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "texture",
-          "type": "uniform_t",
-          "links": [
-            48
-          ]
-        }
-      ],
-      "title": "Texture Buffer",
-      "properties": {
-        "src": "test_texture"
-      }
-    },
-    {
-      "id": 5,
-      "type": "gfx/PipelineNode",
-      "pos": {
-        "0": 284,
-        "1": 251,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": {
-        "0": 140,
-        "1": 26
-      },
-      "flags": {
-        "collapsed": true
-      },
-      "order": 4,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "out",
-          "type": "pipeline_t",
-          "links": [
-            20,
-            40
-          ]
-        }
-      ],
-      "title": "Pipeline",
-      "properties": {
-        "vs": "test.vs.glsl",
-        "ps": "test.ps.glsl"
-      }
     }
   ],
   "links": [
-    [
-      20,
-      5,
-      0,
-      11,
-      0,
-      "pipeline_t"
-    ],
-    [
-      38,
-      10,
-      1,
-      11,
-      2,
-      "attribute_t"
-    ],
-    [
-      39,
-      10,
-      4,
-      11,
-      1,
-      "indices_t"
-    ],
     [
       40,
       5,
@@ -550,22 +576,6 @@
       0,
       8,
       0,
-      "texture_t"
-    ],
-    [
-      46,
-      10,
-      2,
-      11,
-      4,
-      "attribute_t"
-    ],
-    [
-      48,
-      14,
-      0,
-      11,
-      5,
       "uniform_t"
     ],
     [
@@ -577,19 +587,67 @@
       "attribute_t"
     ],
     [
-      53,
-      15,
+      55,
+      5,
+      0,
+      11,
+      0,
+      "pipeline_t"
+    ],
+    [
+      56,
+      9,
+      0,
+      11,
+      3,
+      "attribute_t"
+    ],
+    [
+      57,
+      9,
+      3,
+      11,
+      2,
+      "attribute_t"
+    ],
+    [
+      58,
+      9,
+      2,
+      11,
+      1,
+      "indices_t"
+    ],
+    [
+      59,
+      11,
+      0,
+      17,
+      0,
+      "drawcall_t"
+    ],
+    [
+      60,
+      14,
+      0,
+      11,
+      6,
+      "uniform_t"
+    ],
+    [
+      61,
+      17,
       0,
       12,
       5,
       "uniform_t"
     ],
     [
-      54,
-      11,
+      62,
+      12,
       0,
       4,
-      1,
+      0,
       "drawcall_t"
     ]
   ],
