@@ -1,22 +1,22 @@
 import GoldenLayout from 'golden-layout';
 import React from 'react';
 import ReactDOM from 'react-dom';
-import Markdown from 'react-markdown';
+// import Markdown from 'react-markdown';
 import './css/main.css';
 import 'litegraph.js/css/litegraph.css'
 import AceEditor from 'react-ace';
 import 'brace/mode/glsl';
 import 'brace/theme/tomorrow_night_eighties';
-import { JSONEditor } from 'react-json-editor-viewer';
+// import { JSONEditor } from 'react-json-editor-viewer';
 import * as dat from 'dat.gui';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import { vec2, vec3, vec4, mat2, mat3, mat4, quat } from 'gl-matrix';
+// import { vec2, vec3, vec4, mat2, mat3, mat4, quat } from 'gl-matrix';
 import { Modal, Button, FormControl, Dropdown, DropdownButton } from 'react-bootstrap';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
-import { RoughnessMipmapper } from 'three/examples/jsm/utils/RoughnessMipmapper.js';
+// import { RoughnessMipmapper } from 'three/examples/jsm/utils/RoughnessMipmapper.js';
 
 var LG = require('./3rdparty/litegraph');
 let LGraph = LG.LGraph;
@@ -447,6 +447,47 @@ global_state.update = () => {
   sorted_list.forEach(node => { if (node.update) node.update(); });
 };
 global_state.periodic_update = setInterval(global_state.update, 1000);
+global_state.toposort = () => {
+  let sorted = [];
+  let sorted_set = new Set();
+  let unsorted_set = new Set();
+  let unsorted = [];
+  global_state.litegraph._nodes.forEach(node => unsorted_set.add(node));
+  global_state.litegraph._nodes.forEach(node => unsorted.push(node));
+
+  while (unsorted.length) {
+    let node = unsorted.shift();
+    var is_ready = true;
+    for (let i in node.inputs) {
+      let link_id = node.inputs[i].link;
+      if (link_id) {
+        var link_info = global_state.litegraph.links[link_id];
+        if (link_info) {
+          let target_node = global_state.litegraph.getNodeById(link_info.origin_id);
+          if (unsorted_set.has(target_node)) {
+            is_ready = false;
+            break;
+          }
+        }
+      }
+    }
+    if (is_ready) {
+      sorted.push(node);
+      sorted_set.add(node);
+      unsorted_set.delete(node);
+    } else {
+      unsorted.push(node);
+    }
+  }
+  return sorted;
+};
+global_state.draw = () => {
+  let sorted_nodes = global_state.toposort();
+  sorted_nodes.forEach(node => { if (node.gl_init) node.gl_init(global_state.gl) });
+  sorted_nodes.forEach(node => { if (node.gl_draw) node.gl_draw(global_state.gl) });
+  Array.from(sorted_nodes).reverse().forEach(node => { if (node.gl_release) node.gl_release(global_state.gl) });
+  global_state.litegraph_canvas.setDirty(true);
+};
 // TODO:
 // * drawcall node
 //   * input attribute stream
@@ -492,7 +533,7 @@ class LoadGraphButton extends React.Component {
             <DropdownButton id="dropdown-item-button" title="Dropdown button">
               {graph_list.map(
                 variant => (
-                  <Dropdown.Item onClick={() => {
+                  <Dropdown.Item key={variant} onClick={() => {
                     fetch(variant)
                       .then(response => response.text())
                       .then(text => {
@@ -713,7 +754,7 @@ class ModelNode extends MyLGraphNode {
         });
 
       renderer.setPixelRatio(1.0);
-      renderer.setSize(256, 256);
+      renderer.setSize(512, 512);
       renderer.outputEncoding = THREE.sRGBEncoding;
 
 
@@ -735,13 +776,13 @@ class ModelNode extends MyLGraphNode {
     div.appendChild(canvas2);
     propnode.datgui = {};
     propnode.datgui.domElement = div;
-    div.width = 256;
+    div.width = 512;
     {
       let ctx = canvas2.getContext("2d");
       var yoffset = 0;
       var xoffset = 128;
       var border = 16;
-      var size = 128;
+      var size = 256;
       canvas2.width = xoffset + size;
       var height = 0;
       var images = [];
@@ -787,8 +828,8 @@ class GLComponent extends React.Component {
     if (!ext) {
       return alert('need EXT_color_buffer_float');
     }
-    console.log(ext);
-    let canvas = this.canvas;
+    // console.log(ext);
+    global_state.glcanvas = this.canvas;
     global_state.gl = gl;
     global_state.draw_triangle(gl);
   }
@@ -825,6 +866,27 @@ class BackBufferNode extends MyLGraphNode {
         global_state.litegraph.remove(list[i]);
       }
     }
+    // this.button = this.addWidget("button", "draw", null, (v) => { this.draw(); }, {});
+  }
+  gl_draw = (gl) => {
+    let in_node = this.getInputNodeByName("in");
+    if (!in_node)
+      return;
+    let input_link = this.getInputLinkByName("in");
+    let tex = in_node.get_texture(input_link.origin_slot);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.blendFunc(gl.ONE, gl.ONE);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.viewport(0, 0, global_state.glcanvas.width, global_state.glcanvas.height);
+    gl.clearColor(0, 0, 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    global_state.render_texture(tex);
   }
 }
 
@@ -881,7 +943,7 @@ class PipelineNode extends MyLGraphNode {
     return gl.getUniformLocation(this.gl.program, name);
   }
 
-  bind = (gl) => {
+  gl_init = (gl) => {
     if (!this.is_valid)
       return false;
     assert(!("gl" in this));
@@ -893,7 +955,7 @@ class PipelineNode extends MyLGraphNode {
 
     if (!gl.getShaderParameter(this.gl.vs, gl.COMPILE_STATUS)) {
       console.error(gl.getShaderInfoLog(this.gl.vs));
-      this.release(gl);
+      this.gl_release(gl);
       return false;
     }
 
@@ -904,7 +966,7 @@ class PipelineNode extends MyLGraphNode {
 
     if (!gl.getShaderParameter(this.gl.ps, gl.COMPILE_STATUS)) {
       console.error(gl.getShaderInfoLog(this.gl.ps));
-      this.release(gl);
+      this.gl_release(gl);
       return false;
     }
 
@@ -915,10 +977,12 @@ class PipelineNode extends MyLGraphNode {
 
     if (!gl.getProgramParameter(this.gl.program, gl.LINK_STATUS)) {
       console.error(gl.getProgramInfoLog(this.gl.program));
-      this.release(gl);
+      this.gl_release(gl);
       return false;
     }
+  }
 
+  bind = (gl) => {
     gl.useProgram(this.gl.program);
     gl.disable(gl.CULL_FACE);
     gl.frontFace(gl.CW);
@@ -937,7 +1001,7 @@ class PipelineNode extends MyLGraphNode {
     return gl.getAttribLocation(this.gl.program, name);
   }
 
-  release = (gl) => {
+  gl_release = (gl) => {
     if (!("gl" in this))
       return;
     if (this.gl.vs != null) gl.deleteShader(this.gl.vs);
@@ -1227,7 +1291,7 @@ class TextureBufferNode extends MyLGraphNode {
     gl.uniform1i(loc, 0);
   }
 
-  release = (gl) => {
+  gl_release = (gl) => {
     if (this.gl && this.gl.texture)
       gl.deleteTexture(this.gl.texture);
     delete this.gl;
@@ -1244,7 +1308,7 @@ class TextureBufferNode extends MyLGraphNode {
       return;
     this.bind(gl);
     let image_data = global_state.get_texture_data(this.gl.texture, this.buf.format);
-    this.release(gl);
+    this.gl_release(gl);
     let tmp_canvas = document.createElement("canvas");
     let tmp_canvasContext = tmp_canvas.getContext("2d");
     tmp_canvas.width = image_data.width;
@@ -1326,12 +1390,12 @@ class DrawCallNode extends MyLGraphNode {
     this.set_inputs(sat);
   }
 
-  draw = (gl) => {
+  gl_draw = (gl) => {
     let pipeline = this.getInputNodeByName("pipeline");
     if (pipeline == null)
       return;
     pipeline.bind(gl);
-    let release_queue = [];
+    // let release_queue = [];
     for (let i in this.uniforms) {
       let uni = this.uniforms[i];
       let input = this.getInputNodeByName(uni.name);
@@ -1341,7 +1405,7 @@ class DrawCallNode extends MyLGraphNode {
       if (uni.type == "texture") {
         // let texture = input.get_texture(input_link.origin_slot);
         input.bind(gl, pipeline.get_uniform_location(gl, uni.name));
-        release_queue.push(() => input.release(gl));
+        // release_queue.push(() => input.gl_release(gl));
       } else {
 
       }
@@ -1405,8 +1469,8 @@ class DrawCallNode extends MyLGraphNode {
     // gl.drawArrays(gl.TRIANGLES, 0, draw_size);
     gl_buffers.forEach(buf => gl.deleteBuffer(buf));
     gl.deleteVertexArray(glarr);
-    release_queue.forEach(fn => fn());
-    pipeline.release(gl);
+    // release_queue.forEach(fn => fn());
+    // pipeline.gl_release(gl);
   }
 
   update = () => {
@@ -1431,7 +1495,6 @@ class PassNode extends MyLGraphNode {
     // this.slider = this.addWidget("slider", "Slider", 0.5, function (v) { }, { min: 0, max: 1 });
     // this.button = this.addWidget("button", "Update", null, (v) => {this.update_thumbnails(global_state.gl); }, {});
     this.button = this.addWidget("button", "Add DC", null, (v) => { this.addDC(); }, {});
-    this.button = this.addWidget("button", "draw", null, (v) => { this.draw(); }, {});
     // this.properties = { dc_cnt: 0 };
     this.title = "Pass";
     this.properties = {
@@ -1446,8 +1509,8 @@ class PassNode extends MyLGraphNode {
     };
   }
 
-  draw = () => {
-    this.bind(global_state.gl);
+  gl_draw = (gl) => {
+    this.bind(gl);
     this.inputs.forEach(input => {
 
       if (input.type == "drawcall_t") {
@@ -1456,11 +1519,10 @@ class PassNode extends MyLGraphNode {
           return;
         let dc = global_state.litegraph.getNodeById(link.origin_id);
         // console.log(dc);
-        dc.draw(global_state.gl);
+        dc.gl_draw(gl);
       }
     });
-    this.update_thumbnails(global_state.gl);
-    this.release(global_state.gl);
+    this.update_thumbnails(gl);
   }
 
   clear_outputs = () => {
@@ -1533,18 +1595,18 @@ class PassNode extends MyLGraphNode {
     // this.setOutputData(0, "texture_0");
   }
 
-  bind = (gl) => {
+  gl_init = (gl) => {
     this.gl = { fb: null, rts: [] };
     this.gl.fb = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.gl.fb);
     assert(this.properties.rts.length != 0 || this.properties.depth != null);
-    let draw_buffers = [];
+    this.draw_buffers = [];
     this.gl.rts = [];
     for (let i = 0; i < this.properties.rts.length; ++i) {
       let rt = this.properties.rts[i];
       const tex = gl.createTexture();
       this.gl.rts.push(tex);
-      draw_buffers.push(gl.COLOR_ATTACHMENT0 + i);
+      this.draw_buffers.push(gl.COLOR_ATTACHMENT0 + i);
       gl.bindTexture(gl.TEXTURE_2D, tex);
       var format = null;
       const level = 0;
@@ -1592,7 +1654,17 @@ class PassNode extends MyLGraphNode {
     if (status != gl.FRAMEBUFFER_COMPLETE) {
       throw Error('fb status: ' + status.toString(16));
     }
-    gl.drawBuffers(draw_buffers);
+  }
+
+  get_texture = (id) => {
+    if (id > this.properties.rts.length)
+      return this.gl.depth;
+    return this.gl.rts[id];
+  }
+
+  bind = (gl) => {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.gl.fb);
+    gl.drawBuffers(this.draw_buffers);
     gl.viewport(0, 0, this.properties.viewport.width, this.properties.viewport.height);
     gl.clearColor(0, 0, 0, 1);
     gl.clearDepth(1.0);
@@ -1620,7 +1692,7 @@ class PassNode extends MyLGraphNode {
       this.depth_thumbnail = this.thumbnails[this.thumbnails.length - 1];
   }
 
-  release = (gl) => {
+  gl_release = (gl) => {
     if (!("gl" in this))
       return;
     if (this.gl.vfbs != null) gl.deleteFramebuffer(this.gl.fb);
@@ -1875,11 +1947,12 @@ class GraphNodeComponent extends React.Component {
         <Button style={{ margin: 10 }} onClick={() => { global_state.exec_reset(); }}>
           clear graph
                 </Button>
-        <Button style={{ margin: 10 }} onClick={() => { global_state.update(); }}>
-          force update
-                </Button>
-        <Button style={{ margin: 10 }} onClick={() => { global_state.reload(); }}>
-          force reload
+
+        <Button style={{ margin: 10 }} onClick={() => {
+          // console.log(global_state.toposort());
+          global_state.draw();
+        }}>
+          draw
                 </Button>
         <LoadGraphButton />
         <canvas id='tmp_canvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
@@ -1887,6 +1960,13 @@ class GraphNodeComponent extends React.Component {
     );
   }
 }
+
+{/* <Button style={{ margin: 10 }} onClick={() => { global_state.update(); }}>
+force update
+      </Button>
+<Button style={{ margin: 10 }} onClick={() => { global_state.reload(); }}>
+force reload
+      </Button> */}
 
 // A button that spawns a modal window with text input and submit button
 // @TODO: validation
@@ -2145,24 +2225,27 @@ class GoldenLayoutWrapper extends React.Component {
 
           },
           {
-            type: 'column',
+            type: 'stack',
             width: 84,
-            content: [{
-              type: 'react-component',
-              isClosable: false,
-              component: 'GLW',
-              title: 'GLW',
-              height: 62,
-              props: { globals: () => this.globals }
+            content: [
+              {
+                type: 'react-component',
+                isClosable: false,
+                component: 'PropertiesNode',
+                title: 'PropertiesNode',
+                props: { globals: () => this.globals }
 
-            }, {
-              type: 'react-component',
-              isClosable: false,
-              component: 'PropertiesNode',
-              title: 'PropertiesNode',
-              props: { globals: () => this.globals }
+              },
+              {
 
-            },
+                type: 'react-component',
+                isClosable: false,
+                component: 'GLW',
+                title: 'GLW',
+                height: 62,
+                props: { globals: () => this.globals }
+
+              },
             ]
           }
 
