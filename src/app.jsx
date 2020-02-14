@@ -400,21 +400,22 @@ global_state.update = () => {
   while (true) {
     let new_set = new Set();
     set_to_check.forEach(node => {
-      node.outputs.forEach(output => {
-        if (!output.links)
-          return;
-        output.links.forEach(link_id => {
-          let link = global_state.litegraph.links[link_id];
-          // console.log("visiting link: " + link);
-          let target = global_state.litegraph.getNodeById(link.target_id);
-          if (target && !global_state._dirty_set.has(target)) {
-            global_state._dirty_set.add(target);
-            new_set.add(target);
-          }
+      if (node.outputs)
+        node.outputs.forEach(output => {
+          if (!output.links)
+            return;
+          output.links.forEach(link_id => {
+            let link = global_state.litegraph.links[link_id];
+            // console.log("visiting link: " + link);
+            let target = global_state.litegraph.getNodeById(link.target_id);
+            if (target && !global_state._dirty_set.has(target)) {
+              global_state._dirty_set.add(target);
+              new_set.add(target);
+            }
+          });
+
+
         });
-
-
-      });
     });
     if (new_set.size == 0)
       break;
@@ -427,13 +428,14 @@ global_state.update = () => {
     let to_remove = new Set();
     global_state._dirty_set.forEach(node => {
       let has_dirty_input = false;
-      node.inputs.forEach(input => {
-        if (input.link) {
-          var input_node = global_state.litegraph.getNodeById(input.link.input_id);
-          if (global_state._dirty_set.has(input_node))
-            has_dirty_input = true;
-        }
-      });
+      if (node.inputs)
+        node.inputs.forEach(input => {
+          if (input.link) {
+            var input_node = global_state.litegraph.getNodeById(input.link.input_id);
+            if (global_state._dirty_set.has(input_node))
+              has_dirty_input = true;
+          }
+        });
       if (!has_dirty_input) {
         backlog.add(node);
         sorted_list.push(node);
@@ -444,9 +446,9 @@ global_state.update = () => {
     if (global_state._dirty_set.size == 0)
       break;
   }
-  sorted_list.forEach(node => { if (node.update) node.update(); });
+  sorted_list.forEach(node => { if (node.update) node.update(); node.notify(); });
 };
-global_state.periodic_update = setInterval(global_state.update, 1000);
+global_state.periodic_update = setInterval(global_state.update, 200);
 global_state.toposort = () => {
   let sorted = [];
   let sorted_set = new Set();
@@ -486,6 +488,9 @@ global_state.draw = () => {
   sorted_nodes.forEach(node => { if (node.gl_init) node.gl_init(global_state.gl) });
   sorted_nodes.forEach(node => { if (node.gl_draw) node.gl_draw(global_state.gl) });
   Array.from(sorted_nodes).reverse().forEach(node => { if (node.gl_release) node.gl_release(global_state.gl) });
+  global_state.litegraph_canvas.setDirty(true);
+};
+global_state.update_thumbnails = () => {
   global_state.litegraph_canvas.setDirty(true);
 };
 // TODO:
@@ -557,7 +562,11 @@ var gltf_loader = new GLTFLoader();
 class MyLGraphNode extends LGraphNode {
   constructor() {
     super();
+    this.subscribers = new Set();
   }
+  subscribe = (node) => { this.subscribers.add(node) }
+  unsubscribe = (node) => { this.subscribers.delete(node) }
+  notify = () => { this.subscribers.forEach(node => { if (node.set_dirty) node.set_dirty() }) }
   set_dirty = () => { global_state.set_dirty(this); }
   onConfigure = () => { if (this.update) this.set_dirty(); }
   clean_inputs = () => {
@@ -902,6 +911,7 @@ class PipelineNode extends MyLGraphNode {
     this.title = "Pipeline";
     this.attributes = [];
     this.uniforms = [];
+    this.valid = false;
     global_state.exec_after('remove_src', (cmd) => {
       if (cmd.src_name == this.vs) {
         this.set_vs(null);
@@ -937,7 +947,7 @@ class PipelineNode extends MyLGraphNode {
   }
 
   is_valid = () => {
-    return this.properties.vs != null && this.properties.ps != null;
+    return this.valid;
   }
 
   get_uniform_location = (gl, name) => {
@@ -1033,12 +1043,12 @@ class PipelineNode extends MyLGraphNode {
   get_info = () => {
     if (this.attributes.length == 0)
       this.parse_shaders();
-    return { attributes: this.attributes, uniforms: this.uniforms };
+    return { attributes: this.attributes, uniforms: this.uniforms, valid: this.valid };
   }
 
   parse_shaders = () => {
-    this.clean_inputs();
-
+    // this.clean_inputs();
+    this.valid = false;
     let uniform_set = new Set();
 
     this.attributes = [];
@@ -1075,6 +1085,7 @@ class PipelineNode extends MyLGraphNode {
             this.uniforms.push({ name: uniform.name, type: uniform.type });
           }
         }
+        this.valid = true;
       } catch (e) {
         console.log(e);
         return null;
@@ -1326,7 +1337,7 @@ class TextureBufferNode extends MyLGraphNode {
     var img = document.createElement("img");
     img.src = tmp_canvas.toDataURL("image/png");
     this.thumbnail = img;
-
+    global_state.update_thumbnails();
   }
 
   onDrawBackground(ctx) {
@@ -1386,7 +1397,7 @@ class DrawCallNode extends MyLGraphNode {
 
     if (pipeline) {
       let pipeline_info = pipeline.get_info();
-      if (!pipeline_info.attributes)
+      if (!pipeline_info.valid)
         return;
       this.attributes = pipeline_info.attributes;
       this.uniforms = pipeline_info.uniforms;
@@ -1771,6 +1782,7 @@ class PassNode extends MyLGraphNode {
     }
     if (this.gl.depth)
       this.depth_thumbnail = this.thumbnails[this.thumbnails.length - 1];
+    global_state.update_thumbnails();
   }
 
   gl_release = (gl) => {
@@ -2216,11 +2228,13 @@ class PropertiesNode extends React.Component {
     global_state.exec_on_select((selected_node) => {
       this.selected_node = selected_node;
       this.display_node(selected_node);
+      selected_node.subscribe(this);
     },
       (deselected_node) => {
         if (this.selected_node == deselected_node) {
           this.selected_node = null;
           this.clear_gui();
+          deselected_node.unsubscribe(this);
         }
       });
     global_state.exec_after('remove_src', (cmd) => {
@@ -2234,6 +2248,17 @@ class PropertiesNode extends React.Component {
     global_state.on_reset(() => {
       this.clear_gui();
     });
+    this.subscribers = new Set();
+  }
+
+  subscribe = (node) => { this.subscribers.add(node) }
+  unsubscribe = (node) => { this.subscribers.delete(node) }
+  notify = () => { this.subscribers.forEach(node => { if (node.set_dirty) node.set_dirty() }) }
+  set_dirty = () => { global_state.set_dirty(this); }
+
+  update = () => {
+    this.clear_gui();
+    this.display_node(this.selected_node);
   }
 
   clear_gui = () => {
@@ -2290,13 +2315,43 @@ class GoldenLayoutWrapper extends React.Component {
         type: 'row',
         content: [
           {
-            type: 'react-component',
-            isClosable: false,
-            component: 'TextEditor',
-            title: 'TextEditor',
-            props: { globals: () => this.globals }
+            type: 'column',
+            content: [
+              {
+                type: 'react-component',
+                isClosable: false,
+                component: 'TextEditor',
+                title: 'Text Editor',
+
+                props: { globals: () => this.globals }
 
 
+              },
+              {
+                type: 'stack',
+                width: 84,
+                height: 40,
+                content: [
+                  {
+                    type: 'react-component',
+                    isClosable: false,
+                    component: 'PropertiesNode',
+                    title: 'Properties',
+                    props: { globals: () => this.globals }
+
+                  },
+                  {
+
+                    type: 'react-component',
+                    isClosable: false,
+                    component: 'GLW',
+                    title: 'Back Buffer',
+                    props: { globals: () => this.globals }
+
+                  },
+                ]
+              }
+            ]
           },
           {
             type: 'react-component',
@@ -2307,30 +2362,7 @@ class GoldenLayoutWrapper extends React.Component {
             width: 145
 
           },
-          {
-            type: 'stack',
-            width: 84,
-            content: [
-              {
-                type: 'react-component',
-                isClosable: false,
-                component: 'PropertiesNode',
-                title: 'PropertiesNode',
-                props: { globals: () => this.globals }
 
-              },
-              {
-
-                type: 'react-component',
-                isClosable: false,
-                component: 'GLW',
-                title: 'GLW',
-                height: 62,
-                props: { globals: () => this.globals }
-
-              },
-            ]
-          }
 
         ]
       }]

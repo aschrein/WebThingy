@@ -3,269 +3,11 @@
   "last_link_id": 54,
   "nodes": [
     {
-      "id": 8,
-      "type": "gfx/BackBufferNode",
-      "pos": {
-        "0": 783,
-        "1": 44,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": {
-        "0": 140,
-        "1": 26
-      },
-      "flags": {},
-      "order": 8,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "in",
-          "type": "texture_t",
-          "link": 45
-        }
-      ],
-      "outputs": [],
-      "title": "Back Buffer",
-      "properties": {}
-    },
-    {
-      "id": 10,
-      "type": "gfx/ModelNode",
-      "pos": {
-        "0": -25,
-        "1": 79,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": [
-        140,
-        106
-      ],
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "normal",
-          "type": "attribute_t",
-          "links": []
-        },
-        {
-          "name": "position",
-          "type": "attribute_t",
-          "links": [
-            38
-          ]
-        },
-        {
-          "name": "uv",
-          "type": "attribute_t",
-          "links": [
-            46
-          ]
-        },
-        {
-          "name": "uv2",
-          "type": "attribute_t",
-          "links": null
-        },
-        {
-          "name": "indices",
-          "type": "indices_t",
-          "links": [
-            39
-          ]
-        }
-      ],
-      "title": "Model",
-      "properties": {
-        "fileurl": null
-      }
-    },
-    {
-      "id": 9,
-      "type": "gfx/VertexBufferNode",
-      "pos": {
-        "0": -21,
-        "1": 321,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": [
-        140,
-        86
-      ],
-      "flags": {},
-      "order": 1,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "position",
-          "type": "attribute_t",
-          "links": [
-            41
-          ]
-        },
-        {
-          "name": "color",
-          "type": "attribute_t",
-          "links": []
-        },
-        {
-          "name": "indices",
-          "type": "indices_t",
-          "links": [
-            43
-          ]
-        },
-        {
-          "name": "uv",
-          "type": "attribute_t",
-          "links": [
-            50
-          ]
-        }
-      ],
-      "title": "Vertex Buffer",
-      "properties": {
-        "src": "triangle_pos"
-      }
-    },
-    {
-      "id": 15,
-      "type": "gfx/TextureBufferNode",
-      "pos": {
-        "0": -64,
-        "1": 529,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": [
-        140,
-        140
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "texture",
-          "type": "uniform_t",
-          "links": [
-            53
-          ]
-        }
-      ],
-      "title": "Texture Buffer",
-      "properties": {
-        "src": "test_texture_uint"
-      }
-    },
-    {
-      "id": 11,
-      "type": "gfx/DrawCallNode",
-      "pos": {
-        "0": 195,
-        "1": 75,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": {
-        "0": 140,
-        "1": 146
-      },
-      "flags": {},
-      "order": 5,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "pipeline",
-          "type": "pipeline_t",
-          "link": 20
-        },
-        {
-          "name": "indices",
-          "type": "indices_t",
-          "link": 39
-        },
-        {
-          "name": "position",
-          "type": "attribute_t",
-          "link": 38
-        },
-        {
-          "name": "a",
-          "type": "uniform_t",
-          "link": null
-        },
-        {
-          "name": "uv",
-          "type": "attribute_t",
-          "link": 46
-        },
-        {
-          "name": "albedo",
-          "type": "uniform_t",
-          "link": 48
-        },
-        {
-          "name": "my_uniform",
-          "type": "uniform_t",
-          "link": null
-        }
-      ],
-      "outputs": [
-        {
-          "name": "out",
-          "type": "drawcall_t",
-          "links": [
-            54
-          ]
-        }
-      ],
-      "title": "Draw Call",
-      "properties": {}
-    },
-    {
       "id": 4,
       "type": "gfx/PassNode",
       "pos": {
-        "0": 448,
-        "1": -40,
+        "0": 845,
+        "1": 128,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -334,48 +76,11 @@
       }
     },
     {
-      "id": 14,
-      "type": "gfx/TextureBufferNode",
+      "id": 8,
+      "type": "gfx/BackBufferNode",
       "pos": {
-        "0": -244,
-        "1": 259,
-        "2": 0,
-        "3": 0,
-        "4": 0,
-        "5": 0,
-        "6": 0,
-        "7": 0,
-        "8": 0,
-        "9": 0
-      },
-      "size": [
-        140,
-        140
-      ],
-      "flags": {},
-      "order": 3,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "texture",
-          "type": "uniform_t",
-          "links": [
-            48
-          ]
-        }
-      ],
-      "title": "Texture Buffer",
-      "properties": {
-        "src": "test_texture"
-      }
-    },
-    {
-      "id": 5,
-      "type": "gfx/PipelineNode",
-      "pos": {
-        "0": 6,
-        "1": 233,
+        "0": 1279,
+        "1": 183,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -389,33 +94,103 @@
         "0": 140,
         "1": 26
       },
-      "flags": {
-        "collapsed": true
-      },
-      "order": 4,
+      "flags": {},
+      "order": 8,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "name": "in",
+          "type": "texture_t",
+          "link": 45
+        }
+      ],
+      "outputs": [],
+      "title": "Back Buffer",
+      "properties": {}
+    },
+    {
+      "id": 11,
+      "type": "gfx/DrawCallNode",
+      "pos": {
+        "0": 562,
+        "1": 78,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 146
+      },
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipeline",
+          "type": "pipeline_t",
+          "link": 20
+        },
+        {
+          "name": "indices",
+          "type": "indices_t",
+          "link": 39
+        },
+        {
+          "name": "position",
+          "type": "attribute_t",
+          "link": 38
+        },
+        {
+          "name": "a",
+          "type": "uniform_t",
+          "link": null
+        },
+        {
+          "name": "uv",
+          "type": "attribute_t",
+          "link": 46
+        },
+        {
+          "name": "albedo",
+          "type": "uniform_t",
+          "link": 48
+        },
+        {
+          "name": "my_uniform",
+          "type": "uniform_t",
+          "link": null
+        }
+      ],
       "outputs": [
         {
           "name": "out",
-          "type": "pipeline_t",
+          "type": "drawcall_t",
           "links": [
-            20,
-            40
+            54
           ]
         }
       ],
-      "title": "Pipeline",
+      "title": "Draw Call",
       "properties": {
-        "vs": "test.vs.glsl",
-        "ps": "test.ps.glsl"
+        "default_uniforms": {
+          "my_uniform": [
+            0,
+            0
+          ]
+        }
       }
     },
     {
       "id": 12,
       "type": "gfx/DrawCallNode",
       "pos": {
-        "0": 190,
+        "0": 579,
         "1": 293,
         "2": 0,
         "3": 0,
@@ -485,6 +260,238 @@
             0
           ]
         }
+      }
+    },
+    {
+      "id": 10,
+      "type": "gfx/ModelNode",
+      "pos": {
+        "0": 196,
+        "1": 67,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": [
+        140,
+        106
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "normal",
+          "type": "attribute_t",
+          "links": []
+        },
+        {
+          "name": "position",
+          "type": "attribute_t",
+          "links": [
+            38
+          ]
+        },
+        {
+          "name": "uv",
+          "type": "attribute_t",
+          "links": [
+            46
+          ]
+        },
+        {
+          "name": "uv2",
+          "type": "attribute_t",
+          "links": null
+        },
+        {
+          "name": "indices",
+          "type": "indices_t",
+          "links": [
+            39
+          ]
+        }
+      ],
+      "title": "Model",
+      "properties": {
+        "fileurl": null
+      }
+    },
+    {
+      "id": 9,
+      "type": "gfx/VertexBufferNode",
+      "pos": {
+        "0": 298,
+        "1": 343,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": [
+        140,
+        86
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "position",
+          "type": "attribute_t",
+          "links": [
+            41
+          ]
+        },
+        {
+          "name": "color",
+          "type": "attribute_t",
+          "links": []
+        },
+        {
+          "name": "indices",
+          "type": "indices_t",
+          "links": [
+            43
+          ]
+        },
+        {
+          "name": "uv",
+          "type": "attribute_t",
+          "links": [
+            50
+          ]
+        }
+      ],
+      "title": "Vertex Buffer",
+      "properties": {
+        "src": "triangle_pos"
+      }
+    },
+    {
+      "id": 15,
+      "type": "gfx/TextureBufferNode",
+      "pos": {
+        "0": 454,
+        "1": 570,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": [
+        140,
+        140
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "texture",
+          "type": "uniform_t",
+          "links": [
+            53
+          ]
+        }
+      ],
+      "title": "Texture Buffer",
+      "properties": {
+        "src": "test_texture_uint"
+      }
+    },
+    {
+      "id": 14,
+      "type": "gfx/TextureBufferNode",
+      "pos": {
+        "0": 61,
+        "1": 329,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": [
+        140,
+        140
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "texture",
+          "type": "uniform_t",
+          "links": [
+            48
+          ]
+        }
+      ],
+      "title": "Texture Buffer",
+      "properties": {
+        "src": "test_texture"
+      }
+    },
+    {
+      "id": 5,
+      "type": "gfx/PipelineNode",
+      "pos": {
+        "0": 284,
+        "1": 251,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {
+        "collapsed": true
+      },
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "pipeline_t",
+          "links": [
+            20,
+            40
+          ]
+        }
+      ],
+      "title": "Pipeline",
+      "properties": {
+        "vs": "test.vs.glsl",
+        "ps": "test.ps.glsl"
       }
     }
   ],
