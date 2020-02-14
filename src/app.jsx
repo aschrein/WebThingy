@@ -882,7 +882,7 @@ class BackBufferNode extends MyLGraphNode {
     gl.blendFunc(gl.ONE, gl.ONE);
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.drawBuffers([gl.BACK]);
     gl.viewport(0, 0, global_state.glcanvas.width, global_state.glcanvas.height);
     gl.clearColor(0, 0, 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -901,6 +901,7 @@ class PipelineNode extends MyLGraphNode {
     this.addOutput("out", "pipeline_t");
     this.title = "Pipeline";
     this.attributes = [];
+    this.uniforms = [];
     global_state.exec_after('remove_src', (cmd) => {
       if (cmd.src_name == this.vs) {
         this.set_vs(null);
@@ -1026,15 +1027,22 @@ class PipelineNode extends MyLGraphNode {
   }
 
   update = () => {
-
+    this.parse_shaders();
   }
 
-  parse_shaders() {
-    this.clean_inputs();
-    this.attributes = [];
-    let uniform_set = new Set();
-    this.uniforms = [];
+  get_info = () => {
+    if (this.attributes.length == 0)
+      this.parse_shaders();
+    return { attributes: this.attributes, uniforms: this.uniforms };
+  }
 
+  parse_shaders = () => {
+    this.clean_inputs();
+
+    let uniform_set = new Set();
+
+    this.attributes = [];
+    this.uniforms = [];
     if (this.properties.vs != null) {
       try {
         // Parse vertex shader for attributes
@@ -1243,7 +1251,11 @@ class TextureBufferNode extends MyLGraphNode {
     }
   }
 
-  bind = (gl, loc) => {
+  get_texture = (loc) => {
+    return this.gl.texture;
+  }
+
+  gl_init = (gl) => {
     var texture = gl.createTexture();
     this.gl = {};
     this.gl.texture = texture;
@@ -1286,9 +1298,6 @@ class TextureBufferNode extends MyLGraphNode {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     // gl.generateMipmap(gl.TEXTURE_2D);
 
-    gl.activeTexture(gl.TEXTURE0 + 0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.uniform1i(loc, 0);
   }
 
   gl_release = (gl) => {
@@ -1306,7 +1315,7 @@ class TextureBufferNode extends MyLGraphNode {
     this.thumbnail = null;
     if (!this.buf.data)
       return;
-    this.bind(gl);
+    this.gl_init(gl);
     let image_data = global_state.get_texture_data(this.gl.texture, this.buf.format);
     this.gl_release(gl);
     let tmp_canvas = document.createElement("canvas");
@@ -1352,7 +1361,8 @@ class DrawCallNode extends MyLGraphNode {
     this.addInput("pipeline", "pipeline_t");
     this.addInput("indices", "indices_t");
     this.title = "Draw Call";
-
+    this.attributes = [];
+    this.uniforms = [];
     this.onConnectionsChange = (c_type, target_slot, flag, link_info, input) => {
       // if (input.type == "pipeline_t") {
       this.set_dirty();
@@ -1373,46 +1383,41 @@ class DrawCallNode extends MyLGraphNode {
   update_inputs = () => {
     let pipeline = this.getInputNodeByName("pipeline");
     var sat = new Set();
-    this.attributes = [];
-    this.uniforms = [];
+
     if (pipeline) {
-      let pipeline_info = pipeline.parse_shaders();
-      if (!pipeline_info)
+      let pipeline_info = pipeline.get_info();
+      if (!pipeline_info.attributes)
         return;
       this.attributes = pipeline_info.attributes;
       this.uniforms = pipeline_info.uniforms;
       this.attributes.forEach(a => sat.add("attribute_t " + a.name));
       this.uniforms.forEach(a => sat.add("uniform_t " + a.name));
-
+      if (this.properties.default_uniforms) {
+        let to_remove = [];
+        Object.keys(this.properties.default_uniforms).forEach(uni_name => {
+          if (!sat.has("uniform_t " + uni_name))
+            to_remove.push(uni_name);
+        });
+        to_remove.forEach(uni_name => {
+          console.log("[INFO] Found stale default value for " + uni_name);
+          delete this.properties.default_uniforms[uni_name]
+        }
+        );
+      }
     }
     sat.add("pipeline_t pipeline");
     sat.add("indices_t indices");
     this.set_inputs(sat);
   }
 
-  gl_draw = (gl) => {
+  gl_init = (gl) => {
     let pipeline = this.getInputNodeByName("pipeline");
     if (pipeline == null)
       return;
-    pipeline.bind(gl);
-    // let release_queue = [];
-    for (let i in this.uniforms) {
-      let uni = this.uniforms[i];
-      let input = this.getInputNodeByName(uni.name);
-      if (!input)
-        continue;
-      let input_link = this.getInputLinkByName(uni.name);
-      if (uni.type == "texture") {
-        // let texture = input.get_texture(input_link.origin_slot);
-        input.bind(gl, pipeline.get_uniform_location(gl, uni.name));
-        // release_queue.push(() => input.gl_release(gl));
-      } else {
-
-      }
-    }
-    var glarr = gl.createVertexArray();
-    gl.bindVertexArray(glarr);
-    let gl_buffers = [];
+    this.gl = {};
+    this.gl.arr = gl.createVertexArray();
+    gl.bindVertexArray(this.gl.arr);
+    this.gl.buffers = [];
     for (let i in this.attributes) {
       let attrib = this.attributes[i];
       let input = this.getInputNodeByName(attrib.name);
@@ -1421,13 +1426,11 @@ class DrawCallNode extends MyLGraphNode {
       let input_link = this.getInputLinkByName(attrib.name);
       let out_attrib = input.get_attrib(input_link.origin_slot);
       assert(out_attrib.type == attrib.type);
-
-      let buf = input.get_buffer();
       let data = out_attrib.data;
       let arr = new Float32Array(data);
 
       var gl_buffer = gl.createBuffer();
-      gl_buffers.push(gl_buffer);
+      this.gl.buffers.push(gl_buffer);
       gl.bindBuffer(gl.ARRAY_BUFFER, gl_buffer);
       gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
       let loc = pipeline.get_attrib_location(gl, attrib.name);
@@ -1445,7 +1448,7 @@ class DrawCallNode extends MyLGraphNode {
       gl.vertexAttribPointer(loc, comps, gl.FLOAT, false, 0, 0);
       gl.enableVertexAttribArray(loc);
     }
-    let draw_size = 3;
+    this.draw_size = 3;
     {
       let input = this.getInputNodeByName("indices");
       if (input) {
@@ -1454,23 +1457,101 @@ class DrawCallNode extends MyLGraphNode {
 
         const indexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-        gl_buffers.push(indexBuffer);
+        this.gl.buffers.push(indexBuffer);
         assert(buf.indices.type == "uint16");
         gl.bufferData(
           gl.ELEMENT_ARRAY_BUFFER,
           new Uint16Array(buf.indices.data),
           gl.STATIC_DRAW
         );
-        draw_size = buf.indices.data.length;
+        this.draw_size = buf.indices.data.length;
       }
     }
-    var indexType = gl.UNSIGNED_SHORT;
-    gl.drawElements(gl.TRIANGLES, draw_size, indexType, 0);
-    // gl.drawArrays(gl.TRIANGLES, 0, draw_size);
-    gl_buffers.forEach(buf => gl.deleteBuffer(buf));
-    gl.deleteVertexArray(glarr);
-    // release_queue.forEach(fn => fn());
-    // pipeline.gl_release(gl);
+    this.index_type = gl.UNSIGNED_SHORT;
+  }
+
+  display = (propnode) => {
+    if (this.uniforms) {
+      let datgui_state = {
+      };
+      let new_rt = propnode.datgui.addFolder("Uniforms");
+      let add_vec = (name, comps) => {
+        let strs = [".x", ".y", ".z", ".w"];
+        if (!("default_uniforms" in this.properties)) {
+          this.properties["default_uniforms"] = {};
+        }
+        if (!(name in this.properties.default_uniforms)) {
+          this.properties.default_uniforms[name] = [];
+        }
+        if (this.properties.default_uniforms[name].length != comps) {
+          this.properties.default_uniforms[name] = new Array(comps).fill(0.0);;
+        }
+        for (var i = 0; i < comps; i++) {
+          let id = i;
+          datgui_state[name + strs[i]] = this.properties.default_uniforms[name][i];
+          new_rt.add(datgui_state, name + strs[i]).step(0.05)
+            .onChange(v => this.properties.default_uniforms[name][id] = v);
+        }
+      };
+      this.uniforms.forEach(uni => {
+        switch (uni.type) {
+          case "float":
+            add_vec(uni.name, 1);
+            break;
+          case "vec2":
+            add_vec(uni.name, 2);
+            break;
+          case "vec3":
+            add_vec(uni.name, 3);
+            break;
+        };
+
+
+
+      });
+
+      new_rt.open();
+    }
+  }
+
+  gl_draw = (gl) => {
+    let pipeline = this.getInputNodeByName("pipeline");
+    if (pipeline == null)
+      return;
+    pipeline.bind(gl);
+    var tu_cnt = 0;
+    for (let i in this.uniforms) {
+      let uni = this.uniforms[i];
+      let loc = pipeline.get_uniform_location(gl, uni.name);
+      let tu = tu_cnt;
+      if (uni.type == "texture") {
+        gl.activeTexture(gl.TEXTURE0 + tu);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+        gl.uniform1i(loc, tu);
+        tu_cnt += 1;
+      }
+      let input = this.getInputNodeByName(uni.name);
+      if (!input)
+        continue;
+      let input_link = this.getInputLinkByName(uni.name);
+      if (uni.type == "texture") {
+        let texture = input.get_texture(input_link.origin_slot);
+        gl.activeTexture(gl.TEXTURE0 + tu);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.uniform1i(loc, tu);
+      } else {
+
+      }
+    }
+    gl.bindVertexArray(this.gl.arr);
+    gl.drawElements(gl.TRIANGLES, this.draw_size, this.index_type, 0);
+
+  }
+
+  gl_release = (gl) => {
+    this.gl.buffers.forEach(buf => gl.deleteBuffer(buf));
+    gl.deleteVertexArray(this.gl.arr);
+    delete this.gl;
   }
 
   update = () => {
@@ -1657,7 +1738,7 @@ class PassNode extends MyLGraphNode {
   }
 
   get_texture = (id) => {
-    if (id > this.properties.rts.length)
+    if (id >= this.properties.rts.length)
       return this.gl.depth;
     return this.gl.rts[id];
   }
@@ -1894,10 +1975,12 @@ class GraphNodeComponent extends React.Component {
       .then(text => {
         init_litegraph(JSON.parse(text));
       });
+    this.onResize();
   }
 
-  onResize() {
-    global_state.litegraph_canvas.resize();
+  onResize = () => {
+    let parent = document.getElementById("tmp_canvas_container");
+    global_state.litegraph_canvas.resize(parent.offsetWidth, parent.offsetHeight - 70);
   }
 
   dumpJson() {
@@ -1955,7 +2038,7 @@ class GraphNodeComponent extends React.Component {
           draw
                 </Button>
         <LoadGraphButton />
-        <canvas id='tmp_canvas' width='50%' height='50%' style={{ border: '1px solid' }}></canvas>
+        <canvas id='tmp_canvas' style={{ border: '1px solid' }}></canvas>
       </div>
     );
   }
@@ -2117,8 +2200,8 @@ class TextEditorComponent extends React.Component {
           }}
           autoScrollEditorIntoView={false}
           wrapEnabled={false}
-          height="100%"
-          width="100%"
+          height="calc(100% - 100px)"
+          width="calc(100%)"
         />
       </div>
     );
