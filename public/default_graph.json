@@ -1,6 +1,6 @@
 {
-  "last_node_id": 22,
-  "last_link_id": 73,
+  "last_node_id": 23,
+  "last_link_id": 75,
   "nodes": [
     {
       "id": 20,
@@ -19,7 +19,7 @@
       },
       "size": {
         "0": 140,
-        "1": 26
+        "1": 66
       },
       "flags": {},
       "order": 0,
@@ -32,6 +32,16 @@
           "links": [
             68
           ]
+        },
+        {
+          "name": "mesh",
+          "type": "mesh_t",
+          "links": null
+        },
+        {
+          "name": "mesh",
+          "type": "mesh_t",
+          "links": null
         }
       ],
       "title": "Model",
@@ -177,7 +187,7 @@
         "1": 26
       },
       "flags": {},
-      "order": 10,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -377,9 +387,7 @@
         {
           "name": "rt#0",
           "type": "uniform_t",
-          "links": [
-            72
-          ]
+          "links": []
         },
         {
           "name": "rt#1",
@@ -446,7 +454,8 @@
           "name": "rt#0",
           "type": "uniform_t",
           "links": [
-            69
+            69,
+            74
           ]
         },
         {
@@ -476,8 +485,8 @@
       "id": 22,
       "type": "gfx/DrawCallNode",
       "pos": {
-        "0": 1066,
-        "1": 63,
+        "0": 1072,
+        "1": 74,
         "2": 0,
         "3": 0,
         "4": 0,
@@ -492,7 +501,7 @@
         "1": 66
       },
       "flags": {},
-      "order": 8,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -508,7 +517,7 @@
         {
           "name": "in_texture",
           "type": "uniform_t",
-          "link": 72
+          "link": 75
         }
       ],
       "outputs": [
@@ -521,6 +530,47 @@
         }
       ],
       "title": "Draw Call",
+      "properties": {}
+    },
+    {
+      "id": 23,
+      "type": "gfx/FeedbackNode",
+      "pos": {
+        "0": 1157,
+        "1": -75,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "in",
+          "type": "uniform_t",
+          "link": 74
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "uniform_t",
+          "links": [
+            75
+          ]
+        }
+      ],
+      "title": "Feedback",
       "properties": {}
     }
   ],
@@ -582,20 +632,28 @@
       "pipeline_t"
     ],
     [
-      72,
-      4,
-      0,
-      22,
-      2,
-      "uniform_t"
-    ],
-    [
       73,
       22,
       0,
       17,
       0,
       "drawcall_t"
+    ],
+    [
+      74,
+      17,
+      0,
+      23,
+      0,
+      "uniform_t"
+    ],
+    [
+      75,
+      23,
+      0,
+      22,
+      2,
+      "uniform_t"
     ]
   ],
   "groups": [],
@@ -620,7 +678,7 @@
         "code": "#version 300 es\nlayout (location=0) in vec3 position;\nlayout (location=1) in vec2 uv;\nout vec2 f_uv;\nvoid main() {\n    f_uv = uv;\n    gl_Position = vec4(position, 1.0);\n    \n}"
       },
       "ss.ps.glsl": {
-        "code": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp usampler2D;\nin vec2 f_uv;\nuniform sampler2D in_texture;\nlayout (location=0) out vec4 fragColor;\nvoid main() {\n    vec4 s = texture(in_texture, f_uv);\n    s.yz = f_uv;\n    fragColor = vec4(s);\n}"
+        "code": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp usampler2D;\nin vec2 f_uv;\nuniform sampler2D in_texture;\nlayout (location=0) out vec4 fragColor;\nvoid main() {\n    vec4 s = texture(in_texture, f_uv);\n    // s.yz = f_uv;\n    s.x = s.x + f_uv.x;\n    fragColor = vec4(s);\n}"
       }
     }
   },

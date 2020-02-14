@@ -391,9 +391,13 @@ global_state.get_texture_data = (tex, format) => {
   return image;
 };
 global_state._dirty_set = new Set();
+global_state._dirty_deferred_set = new Set();
 global_state.set_dirty = (node) => {
   // console.log(node + " is dirty!");
-  global_state._dirty_set.add(node);
+  if (node.is_recursive && node.is_recursive())
+    global_state._dirty_deferred_set.add(node);
+  else
+    global_state._dirty_set.add(node);
 };
 global_state.update = () => {
   let set_to_check = new Set(global_state._dirty_set);
@@ -424,6 +428,7 @@ global_state.update = () => {
   // console.log(global_state._dirty_set);
   let sorted_list = [];
   let backlog = new Set();
+  var loop_counter = 0;
   while (true) {
     let to_remove = new Set();
     global_state._dirty_set.forEach(node => {
@@ -445,8 +450,13 @@ global_state.update = () => {
     backlog.clear();
     if (global_state._dirty_set.size == 0)
       break;
+    loop_counter += 1;
+    if (loop_counter > 1000)
+      throw Error("[Error] Recursion detected. Exiting loop");
   }
   sorted_list.forEach(node => { if (node.update) node.update(); node.notify(); });
+  global_state._dirty_deferred_set.forEach(node => { if (node.update) node.update(); });
+  global_state._dirty_deferred_set.clear();
 };
 global_state.periodic_update = setInterval(global_state.update, 200);
 global_state.toposort = () => {
@@ -454,8 +464,13 @@ global_state.toposort = () => {
   let sorted_set = new Set();
   let unsorted_set = new Set();
   let unsorted = [];
-  global_state.litegraph._nodes.forEach(node => unsorted_set.add(node));
-  global_state.litegraph._nodes.forEach(node => unsorted.push(node));
+  global_state.litegraph._nodes.forEach(node => {
+    if (!node.is_recursive || !node.is_recursive()) {
+      unsorted_set.add(node);
+      unsorted.push(node);
+    }
+  });
+
 
   while (unsorted.length) {
     let node = unsorted.shift();
@@ -481,6 +496,12 @@ global_state.toposort = () => {
       unsorted.push(node);
     }
   }
+  global_state.litegraph._nodes.forEach(node => {
+    if (node.is_recursive && node.is_recursive()) {
+      // console.log(node);
+      sorted.push(node);
+    }
+  });
   return sorted;
 };
 global_state.draw = () => {
@@ -564,6 +585,7 @@ class MyLGraphNode extends LGraphNode {
     super();
     this.subscribers = new Set();
   }
+  is_recursive = () => false;
   subscribe = (node) => { this.subscribers.add(node) }
   unsubscribe = (node) => { this.subscribers.delete(node) }
   notify = () => { this.subscribers.forEach(node => { if (node.set_dirty) node.set_dirty() }) }
@@ -1561,17 +1583,33 @@ class DrawCallNode extends MyLGraphNode {
 
 }
 
+class FeedbackNode extends MyLGraphNode {
+  constructor() {
+    super();
+    this.title = "Feedback";
+    this.addInput("in", "uniform_t");
+    this.addOutput("out", "uniform_t");
+    this.gl = { tex: null };
+  }
+  is_recursive = () => true;
+  get_texture = () => {
+    return this.gl.tex;
+  }
+  gl_draw = (gl) => {
+    if (this.gl.tex)
+      gl.deleteTexture(this.gl.tex);
+    this.gl = { tex: null };
+    let input_link = this.getInputLinkByName("in");
+    if (!input_link)
+      return;
+    this.gl.tex = this.getInputNodeByName("in").clone_texture(input_link.origin_slot);
+  }
+}
+
 class PassNode extends MyLGraphNode {
   constructor() {
     super();
-    // this.addInput("in#0", "texture_t");
-    // this.addInput("in#0", "vec4_t");
-    // this.addOutput("out#0", "texture_t");
-    // this.addDC = this.addDC.bind(this);
-    // this.slider = this.addWidget("slider", "Slider", 0.5, function (v) { }, { min: 0, max: 1 });
-    // this.button = this.addWidget("button", "Update", null, (v) => {this.update_thumbnails(global_state.gl); }, {});
     this.button = this.addWidget("button", "Add DC", null, (v) => { this.addDC(); }, {});
-    // this.properties = { dc_cnt: 0 };
     this.title = "Pass";
     this.properties = {
       viewport: { width: 512, height: 512 },
@@ -1679,37 +1717,61 @@ class PassNode extends MyLGraphNode {
     this.draw_buffers = [];
     this.gl.rts = [];
     for (let i = 0; i < this.properties.rts.length; ++i) {
-      let rt = this.properties.rts[i];
-      const tex = gl.createTexture();
+      const tex = this.gen_texture(gl, i);
       this.gl.rts.push(tex);
       this.draw_buffers.push(gl.COLOR_ATTACHMENT0 + i);
-      gl.bindTexture(gl.TEXTURE_2D, tex);
-      var format = null;
-      const level = 0;
-      switch (rt.format) {
-        case "RGBA8": {
-          format = gl.RGBA8;
-        }
-          break;
-        case "RGBA32F": {
-          format = gl.RGBA32F;
-        }
-          break;
-        default:
-          throw Error("unknown format");
-      }
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-      gl.texStorage2D(gl.TEXTURE_2D, 1, format, this.properties.viewport.width, this.properties.viewport.height);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, tex, level);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, tex, 0);
     }
 
     if (this.properties.depth != null) {
+      const tex = this.gen_texture(gl, this.properties.rts.length);
+      this.gl.depth = tex;
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, 0);
+    }
+    var status = gl.checkFramebufferStatus(gl.DRAW_FRAMEBUFFER);
+    if (status != gl.FRAMEBUFFER_COMPLETE) {
+      throw Error('fb status: ' + status.toString(16));
+    }
+  }
+
+  clone_texture = (id) => {
+    let gl = global_state.gl;
+    // create to render to
+    const targetTextureWidth = this.properties.viewport.width;
+    const targetTextureHeight = this.properties.viewport.height;
+    const targetTexture = this.gen_texture(gl, id);
+    const srcTexture = this.get_texture(id);
+    // Create and bind the framebuffer
+    const fb = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, targetTexture, 0);
+
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.depthFunc(gl.LEQUAL);
+    gl.blendFunc(gl.ONE, gl.ONE);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.viewport(0, 0, targetTextureWidth, targetTextureHeight);
+    gl.clearColor(0, 0, 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    global_state.render_texture(srcTexture);
+
+    gl.deleteFramebuffer(fb);
+    return targetTexture;
+  }
+
+  gen_texture = (gl, id) => {
+    if (id >= this.properties.rts.length) {
       let rt = this.properties.depth;
       const tex = gl.createTexture();
-      this.gl.depth = tex;
       gl.bindTexture(gl.TEXTURE_2D, tex);
       var format = null;
-      let level = 0;
+
       switch (rt.format) {
         case "D16": {
           format = gl.DEPTH_COMPONENT16;
@@ -1724,11 +1786,27 @@ class PassNode extends MyLGraphNode {
       }
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       gl.texStorage2D(gl.TEXTURE_2D, 1, format, this.properties.viewport.width, this.properties.viewport.height);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, tex, level);
-    }
-    var status = gl.checkFramebufferStatus(gl.DRAW_FRAMEBUFFER);
-    if (status != gl.FRAMEBUFFER_COMPLETE) {
-      throw Error('fb status: ' + status.toString(16));
+      return tex;
+    } else {
+      let rt = this.properties.rts[id];
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      var format = null;
+      switch (rt.format) {
+        case "RGBA8": {
+          format = gl.RGBA8;
+        }
+          break;
+        case "RGBA32F": {
+          format = gl.RGBA32F;
+        }
+          break;
+        default:
+          throw Error("unknown format");
+      }
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, format, this.properties.viewport.width, this.properties.viewport.height);
+      return tex;
     }
   }
 
@@ -1762,6 +1840,7 @@ class PassNode extends MyLGraphNode {
       tmp_canvasContext.putImageData(image_data, 0, 0);
       var img = document.createElement("img");
       img.src = tmp_canvas.toDataURL("image/png");
+      img.onload = () => { global_state.update_thumbnails() };
       this.thumbnails.push(img);
     }
     if (this.gl.depth)
@@ -1965,6 +2044,7 @@ class GraphNodeComponent extends React.Component {
     LiteGraph.registerNodeType("gfx/VertexBufferNode", VertexBufferNode);
     LiteGraph.registerNodeType("gfx/ModelNode", ModelNode);
     LiteGraph.registerNodeType("gfx/TextureBufferNode", TextureBufferNode);
+    LiteGraph.registerNodeType("gfx/FeedbackNode", FeedbackNode);
     // Load default json scene
     fetch('default_graph.json')
       .then(response => response.text())
