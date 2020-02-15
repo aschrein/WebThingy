@@ -16,6 +16,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+import { BufferGeometryUtils } from 'three/examples/jsm/utils/BufferGeometryUtils';
 // import { RoughnessMipmapper } from 'three/examples/jsm/utils/RoughnessMipmapper.js';
 
 var LG = require('./3rdparty/litegraph');
@@ -25,7 +26,6 @@ let LiteGraph = LG.LiteGraph;
 let LGraphNode = LG.LGraphNode;
 
 let isSetsEqual = (a, b) => a.size === b.size && [...a].every(value => b.has(value));
-
 function assert(condition) {
   if (!condition) {
     var message = "Assertion failed";
@@ -509,8 +509,9 @@ global_state.toposort = () => {
 global_state.frame_count = 0;
 global_state.draw = () => {
   let sorted_nodes = global_state.toposort();
+  // console.log(sorted_nodes);
   sorted_nodes.forEach(node => { if (node.gl_init) node.gl_init(global_state.gl) });
-  sorted_nodes.forEach(node => { if (node.gl_draw) node.gl_draw(global_state.gl) });
+  sorted_nodes.forEach(node => { if (node.gl_render) node.gl_render(global_state.gl) });
   Array.from(sorted_nodes).reverse().forEach(node => { if (node.gl_release) node.gl_release(global_state.gl) });
   global_state.litegraph_canvas.setDirty(true);
   global_state.frame_count += 1;
@@ -527,7 +528,7 @@ global_state.update_thumbnails = () => {
 //   * camera node(generates look,up,left vectors and view/projection/inverse matrices)
 // * update propagation?
 
-let graph_list = ['default_graph.json', 'ltc.json'];
+let graph_list = ['default_graph.json', 'ltc.json', 'feedback_test.json'];
 
 class LoadGraphButton extends React.Component {
   constructor(props, context) {
@@ -688,6 +689,7 @@ class ModelNode extends MyLGraphNode {
 
   init = (mesh) => {
     assert(mesh.type == "Mesh");
+    BufferGeometryUtils.computeTangents(mesh.geometry);
     this.attributes = {};
     Object.keys(mesh.geometry.attributes).forEach(attr_name => {
       let raw_attr = mesh.geometry.attributes[attr_name];
@@ -716,6 +718,7 @@ class ModelNode extends MyLGraphNode {
         this.images.push({ name: field, img: this.pbr_material[field].image });
       }
     });
+
     // console.log(mesh.geometry);
   }
 
@@ -826,10 +829,14 @@ class ModelNode extends MyLGraphNode {
     }
     div.appendChild(canvas2);
     // propnode.datgui = {};
-    let datgui_state = {
-      format: 0.0,
-    };
-    propnode.datgui.add(datgui_state, 'format');
+    let folder = propnode.datgui.addFolder("Attributes");
+    for (let i in this.attributes) {
+      let tmp = {
+        prop: () => { },
+      };
+      folder.add(tmp, "prop").name(i);
+    }
+    folder.open();
     propnode.datgui.domElement.appendChild(div);
     div.width = 512;
     {
@@ -925,7 +932,7 @@ class BackBufferNode extends MyLGraphNode {
     this.viewport = { width: 128, height: 128 };
     // this.button = this.addWidget("button", "draw", null, (v) => { this.draw(); }, {});
   }
-  gl_draw = (gl) => {
+  gl_render = (gl) => {
     let in_node = this.getInputNodeByName("in");
     if (!in_node)
       return;
@@ -988,7 +995,7 @@ class BackBufferNode extends MyLGraphNode {
     var size = this.size[0] - border * 2;
     this.viewport.width = size;
     this.viewport.height = size;
-    
+
     if (this.thumbnail) {
       ctx.drawImage(this.thumbnail, xoffset, yoffset, size, size);
     } else {
@@ -1169,6 +1176,9 @@ class PipelineNode extends MyLGraphNode {
           let uniform = json.uniforms[i];
           if (uniform_set.has(uniform.name))
             continue;
+          // names starting with '_' are builtins
+          if (uniform.name[0] == "_")
+            continue;
           uniform_set.add(uniform.name);
           this.uniforms.push({ name: uniform.name, type: uniform.type });
         }
@@ -1180,6 +1190,9 @@ class PipelineNode extends MyLGraphNode {
           for (var i = 0; i < json.uniforms.length - 1; i++) {
             let uniform = json.uniforms[i];
             if (uniform_set.has(uniform.name))
+              continue;
+            // names starting with '_' are builtins
+            if (uniform.name[0] == "_")
               continue;
             uniform_set.add(uniform.name);
             this.uniforms.push({ name: uniform.name, type: uniform.type });
@@ -1486,7 +1499,6 @@ class DrawCallNode extends MyLGraphNode {
         return;
       this.attributes = pipeline_info.attributes;
       this.uniforms = pipeline_info.uniforms;
-      // this.attributes.forEach(a => sat.add("attribute_t " + a.name));
       this.uniforms.forEach(a => sat.add("uniform_t " + a.name));
       if (this.properties.default_uniforms) {
         let to_remove = [];
@@ -1531,6 +1543,8 @@ class DrawCallNode extends MyLGraphNode {
       gl.bindBuffer(gl.ARRAY_BUFFER, gl_buffer);
       gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
       let loc = pipeline.get_attrib_location(gl, attrib.name);
+      if (loc < 0)
+        continue;
       var comps = -1;
       switch (attrib.type) {
         case "vec2":
@@ -1612,9 +1626,20 @@ class DrawCallNode extends MyLGraphNode {
       return;
     pipeline.bind(gl);
     var tu_cnt = 0;
+    // builtins
+    {
+      let loc = pipeline.get_uniform_location(gl, "_resolution");
+
+      if (loc) {
+        let viewport = gl.getParameter(gl.VIEWPORT);
+        gl.uniform2fv(loc, [viewport[2] - viewport[0], viewport[3] - viewport[1]]);
+      }
+    }
     for (let i in this.uniforms) {
       let uni = this.uniforms[i];
       let loc = pipeline.get_uniform_location(gl, uni.name);
+      if (!loc)
+        continue;
       let tu = tu_cnt;
       if (uni.type == "texture") {
         gl.activeTexture(gl.TEXTURE0 + tu);
@@ -1630,6 +1655,10 @@ class DrawCallNode extends MyLGraphNode {
         let texture = input.get_texture(input_link.origin_slot);
         gl.activeTexture(gl.TEXTURE0 + tu);
         gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         gl.uniform1i(loc, tu);
       } else {
         let val = input.get_value(input_link.origin_slot);
@@ -1689,7 +1718,7 @@ class FeedbackNode extends MyLGraphNode {
     }
     return this.gl.tex;
   }
-  gl_draw = (gl) => {
+  gl_render = (gl) => {
     if (this.gl.tex)
       gl.deleteTexture(this.gl.tex);
     this.gl = { tex: null };
@@ -1717,7 +1746,7 @@ class PassNode extends MyLGraphNode {
     };
   }
 
-  gl_draw = (gl) => {
+  gl_render = (gl) => {
     this.bind(gl);
     this.inputs.forEach(input => {
 
@@ -1878,7 +1907,7 @@ class PassNode extends MyLGraphNode {
         default:
           throw Error("unknown format");
       }
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      // gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       gl.texStorage2D(gl.TEXTURE_2D, 1, format,
         this.properties.viewport.width, this.properties.viewport.height);
       return tex;
@@ -1899,7 +1928,7 @@ class PassNode extends MyLGraphNode {
         default:
           throw Error("unknown format");
       }
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      // gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       gl.texStorage2D(gl.TEXTURE_2D, 1, format,
         this.properties.viewport.width, this.properties.viewport.height);
       return tex;
