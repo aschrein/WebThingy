@@ -24,6 +24,12 @@ body {
 
 canvas {
   margin: 0%;
+  image-rendering: optimizeSpeed;             /* Older versions of FF          */
+  image-rendering: -moz-crisp-edges;          /* FF 6.0+                       */
+  image-rendering: -webkit-optimize-contrast; /* Safari                        */
+  image-rendering: -o-crisp-edges;            /* OS X & Windows Opera (12.02+) */
+  image-rendering: pixelated;                 /* Awesome future-browsers       */
+  -ms-interpolation-mode: nearest-neighbor;   /* IE                            */
 }
 
 /* .lm_item_container{
@@ -65,10 +71,6 @@ canvas {
   width: 0px;  /* Remove scrollbar space */
   background: transparent;  /* Optional: just make scrollbar invisible */
 }
-/* Optional: show position indicator in red */
-::-webkit-scrollbar-thumb {
-  background: #FF0000;
-}
 
 .lm_content {
   -ms-overflow-style: none;  /* Internet Explorer 10+ */
@@ -76,4 +78,8 @@ canvas {
 }
 .lm_content::-webkit-scrollbar { 
   display: none;  /* Safari and Chrome */
+}
+
+.margin_16 {
+  margin: 16px;
 }

@@ -5,13 +5,18 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "firefox",
+      "type": "chrome",
+      "runtimeExecutable": "/usr/bin/chromium",
       "request": "launch",
-      "reAttach": true,
-      "name": "Launch localhost",
-      "url": "http://localhost:3000/",
-      "webRoot": "${workspaceFolder}"
+      "name": "Launch Chrome",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}",
+      "runtimeArgs": [
+        "--new-window",
+        "-user-data-dir=\"/${workspaceFolder}/DevProfile\"",
+        "--remote-debugging-port=9222",
+        "--disable-background-networking"
+      ]
     }
-
   ]
 }

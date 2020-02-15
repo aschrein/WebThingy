@@ -332,11 +332,11 @@ global_state.render_texture = (tex, format) => {
   gl.deleteProgram(program);
   gl.deleteVertexArray(triangleArray);
 };
-global_state.get_texture_data = (tex, format) => {
+global_state.get_texture_data = (tex, format, width, height) => {
   let gl = global_state.gl;
   // create to render to
-  const targetTextureWidth = 256;
-  const targetTextureHeight = 256;
+  const targetTextureWidth = Math.floor(width) || 256;
+  const targetTextureHeight = Math.floor(height) || 256;
   const targetTexture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, targetTexture);
 
@@ -385,7 +385,9 @@ global_state.get_texture_data = (tex, format) => {
 
   gl.deleteFramebuffer(fb);
   gl.deleteTexture(targetTexture);
-
+  // console.log(targetTextureWidth);
+  // console.log(targetTextureHeight);
+  // console.log(targetTextureWidth * targetTextureHeight * 4);
   let array = new Uint8ClampedArray(data);
   let image = new ImageData(array, targetTextureWidth, targetTextureHeight);
   return image;
@@ -504,12 +506,14 @@ global_state.toposort = () => {
   });
   return sorted;
 };
+global_state.frame_count = 0;
 global_state.draw = () => {
   let sorted_nodes = global_state.toposort();
   sorted_nodes.forEach(node => { if (node.gl_init) node.gl_init(global_state.gl) });
   sorted_nodes.forEach(node => { if (node.gl_draw) node.gl_draw(global_state.gl) });
   Array.from(sorted_nodes).reverse().forEach(node => { if (node.gl_release) node.gl_release(global_state.gl) });
   global_state.litegraph_canvas.setDirty(true);
+  global_state.frame_count += 1;
 };
 global_state.update_thumbnails = () => {
   global_state.litegraph_canvas.setDirty(true);
@@ -632,6 +636,25 @@ class MyLGraphNode extends LGraphNode {
   }
 }
 
+class FrameCountNode extends MyLGraphNode {
+  constructor() {
+    super();
+    this.title = "Frame count";
+
+    this.addWidget("button", "reset", null, (v) => { global_state.frame_count = 0; }, {});
+    this.addOutput("0", "uniform_t");
+  }
+  get_value = (slot) => {
+    return global_state.frame_count;
+  }
+  onDrawBackground = (ctx) => {
+    if (global_state.frame_count == 0)
+      this.outputs[0].label = "0";
+    else
+      this.outputs[0].label = global_state.frame_count;
+  }
+}
+
 class ModelNode extends MyLGraphNode {
   constructor() {
     super();
@@ -644,6 +667,7 @@ class ModelNode extends MyLGraphNode {
 
       }
     };
+    this.addOutput("mesh", "mesh_t");
     let url = 'models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf';
     gltf_loader.load(url, (gltf) => {
 
@@ -657,7 +681,7 @@ class ModelNode extends MyLGraphNode {
       // });
       this.init(gltf.scene.children[0]);
       // this.clean_outputs();
-      this.addOutput("mesh", "mesh_t");
+
     });
     this.yoffset = 0;
   }
@@ -742,6 +766,7 @@ class ModelNode extends MyLGraphNode {
     var canvas2 = document.createElement("canvas");
     var div = document.createElement("div");
     div.appendChild(canvas1);
+    div.style.cssText = "margin-top: 16px;";
     {
       var context = canvas1.getContext('webgl2', { alpha: false });
       var renderer = new THREE.WebGLRenderer({ canvas: canvas1, context: context });
@@ -752,6 +777,13 @@ class ModelNode extends MyLGraphNode {
 
       scene = new THREE.Scene();
       var render = function () {
+        let parent = propnode.datgui.domElement.parentNode;
+        if (parent) {
+          canvas1.classList.add('margin_16');
+          renderer.setSize(parent.offsetWidth - 32, parent.offsetWidth - 32);
+        }
+        else
+          renderer.setSize(512, 512);
         renderer.render(scene, camera);
       };
       new RGBELoader()
@@ -766,19 +798,14 @@ class ModelNode extends MyLGraphNode {
 
           texture.dispose();
           pmremGenerator.dispose();
-
-          render();
-
-
           scene.add(this.gltf.scene);
-
 
           render();
 
         });
 
       renderer.setPixelRatio(1.0);
-      renderer.setSize(512, 512);
+
       renderer.outputEncoding = THREE.sRGBEncoding;
 
 
@@ -798,13 +825,17 @@ class ModelNode extends MyLGraphNode {
       renderer.render(scene, camera);
     }
     div.appendChild(canvas2);
-    propnode.datgui = {};
-    propnode.datgui.domElement = div;
+    // propnode.datgui = {};
+    let datgui_state = {
+      format: 0.0,
+    };
+    propnode.datgui.add(datgui_state, 'format');
+    propnode.datgui.domElement.appendChild(div);
     div.width = 512;
     {
       let ctx = canvas2.getContext("2d");
       var yoffset = 0;
-      var xoffset = 128;
+      var xoffset = 64;
       var border = 16;
       var size = 256;
       canvas2.width = xoffset + size;
@@ -839,7 +870,6 @@ class GLComponent extends React.Component {
     super(props, context);
     this.graph = new LGraph();
     this.canvas = null;
-    this.onResize = this.onResize.bind(this);
   }
 
   componentDidMount() {
@@ -862,16 +892,17 @@ class GLComponent extends React.Component {
 
   }
 
-  onResize() {
-    this.canvas.resize();
+  onResize = () => {
+    this.canvas.width = this.canvas.parentNode.offsetWidth;
+    this.canvas.height = this.canvas.parentNode.offsetHeight;
+    // this.canvas.resize();
   }
 
   render() {
 
     return (
-      <div id="myglcanvas_container">
-        <canvas id='myglcanvas' width='512' height='512' style={{ border: '1px solid' }}></canvas>
-      </div>
+      <canvas id='myglcanvas' style={{ width: '100%', height: '100%' }}></canvas>
+
     );
   }
 }
@@ -890,6 +921,8 @@ class BackBufferNode extends MyLGraphNode {
         global_state.litegraph.remove(list[i]);
       }
     }
+    this.thumbnail = null;
+    this.viewport = { width: 128, height: 128 };
     // this.button = this.addWidget("button", "draw", null, (v) => { this.draw(); }, {});
   }
   gl_draw = (gl) => {
@@ -898,6 +931,18 @@ class BackBufferNode extends MyLGraphNode {
       return;
     let input_link = this.getInputLinkByName("in");
     let tex = in_node.get_texture(input_link.origin_slot);
+    this.update_thumbnails();
+    let canvas = global_state.glcanvas;
+    var displayWidth = canvas.clientWidth;
+    var displayHeight = canvas.clientHeight;
+
+    if (displayWidth && displayHeight) {
+      if (canvas.width != displayWidth ||
+        canvas.height != displayHeight) {
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+      }
+    }
     gl.disable(gl.CULL_FACE);
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.DEPTH_TEST);
@@ -907,10 +952,50 @@ class BackBufferNode extends MyLGraphNode {
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.drawBuffers([gl.BACK]);
-    gl.viewport(0, 0, global_state.glcanvas.width, global_state.glcanvas.height);
+    gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     global_state.render_texture(tex);
+  }
+
+  update_thumbnails = () => {
+    let in_node = this.getInputNodeByName("in");
+    if (!in_node)
+      return;
+    let input_link = this.getInputLinkByName("in");
+    let tex = in_node.get_texture(input_link.origin_slot);
+    this.thumbnail = null;
+    let image_data = global_state.get_texture_data(tex, "RGBA32F",
+      this.viewport.width, this.viewport.height);
+    let tmp_canvas = document.createElement("canvas");
+    let tmp_canvasContext = tmp_canvas.getContext("2d");
+    tmp_canvas.width = image_data.width;
+    tmp_canvas.height = image_data.height;
+    tmp_canvasContext.putImageData(image_data, 0, 0);
+    var img = document.createElement("img");
+    img.src = tmp_canvas.toDataURL("image/png");
+    this.thumbnail = img;
+    global_state.update_thumbnails();
+  }
+
+  onDrawBackground(ctx) {
+    if (this.flags.collapsed) {
+      return;
+    }
+    var yoffset = 16;
+    var xoffset = 16;
+    var border = 16;
+    var size = this.size[0] - border * 2;
+    this.viewport.width = size;
+    this.viewport.height = size;
+    
+    if (this.thumbnail) {
+      ctx.drawImage(this.thumbnail, xoffset, yoffset, size, size);
+    } else {
+      ctx.fillRect(xoffset, yoffset, size, size);
+    }
+    this.size[1] = size + border * 2;
+
   }
 }
 
@@ -1351,8 +1436,6 @@ class TextureBufferNode extends MyLGraphNode {
     if (this.flags.collapsed) {
       return;
     }
-
-    ctx.fillStyle = "#000";
     var yoffset = 16;
     var xoffset = 16;
     var border = 16;
@@ -1362,12 +1445,7 @@ class TextureBufferNode extends MyLGraphNode {
     } else {
       ctx.fillRect(xoffset, yoffset, size, size);
     }
-    // this.size[0] = xoffset + size + border;
     this.size[1] = size + border * 2;
-    // ctx.fillRect(0, 0, size[0], size[1]);
-    ctx.strokeStyle = "#555";
-
-
   }
 
 }
@@ -1522,9 +1600,6 @@ class DrawCallNode extends MyLGraphNode {
             add_vec(uni.name, 3);
             break;
         };
-
-
-
       });
 
       new_rt.open();
@@ -1557,7 +1632,14 @@ class DrawCallNode extends MyLGraphNode {
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.uniform1i(loc, tu);
       } else {
-
+        let val = input.get_value(input_link.origin_slot);
+        switch (uni.type) {
+          case "int":
+            gl.uniform1i(loc, val);
+            break;
+          default:
+            throw Error("Unimplemented");
+        };
       }
     }
     gl.bindVertexArray(this.gl.arr);
@@ -1590,9 +1672,21 @@ class FeedbackNode extends MyLGraphNode {
     this.addInput("in", "uniform_t");
     this.addOutput("out", "uniform_t");
     this.gl = { tex: null };
+    this.addWidget("button", "reset", null, (v) => { this.reset(); }, {});
+  }
+  reset = () => {
+    let gl = global_state.gl;
+    if (this.gl.tex)
+      gl.deleteTexture(this.gl.tex);
+    this.gl.tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, this.gl.tex);
+    gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, 1, 1);
   }
   is_recursive = () => true;
   get_texture = () => {
+    if (!this.gl.tex) {
+      this.reset();
+    }
     return this.gl.tex;
   }
   gl_draw = (gl) => {
@@ -1785,7 +1879,8 @@ class PassNode extends MyLGraphNode {
           throw Error("unknown format");
       }
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-      gl.texStorage2D(gl.TEXTURE_2D, 1, format, this.properties.viewport.width, this.properties.viewport.height);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, format,
+        this.properties.viewport.width, this.properties.viewport.height);
       return tex;
     } else {
       let rt = this.properties.rts[id];
@@ -1805,7 +1900,8 @@ class PassNode extends MyLGraphNode {
           throw Error("unknown format");
       }
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-      gl.texStorage2D(gl.TEXTURE_2D, 1, format, this.properties.viewport.width, this.properties.viewport.height);
+      gl.texStorage2D(gl.TEXTURE_2D, 1, format,
+        this.properties.viewport.width, this.properties.viewport.height);
       return tex;
     }
   }
@@ -1919,8 +2015,8 @@ class PassNode extends MyLGraphNode {
     new_d.add(datgui_state, 'remove_depth');
     new_d.open();
     let vp = propnode.datgui.addFolder("Viewport");
-    vp.add(datgui_state, 'width', 1, 1024).onChange((v) => this.set_width(v));;
-    vp.add(datgui_state, 'height', 1, 1024).onChange((v) => this.set_height(v));;
+    vp.add(datgui_state, 'width', 128, 1024 * 2, 16).onChange((v) => this.set_width(v));;
+    vp.add(datgui_state, 'height', 128, 1024 * 2, 16).onChange((v) => this.set_height(v));;
     vp.open();
 
     // this.datgui.add(this.datgui_state, 'select_vs', this.src_list)
@@ -1936,7 +2032,7 @@ class PassNode extends MyLGraphNode {
     }
 
     ctx.fillStyle = "#000";
-    var yoffset = this.yoffset;
+    var yoffset = 32 + this.inputs.length * 20;
     var xoffset = 16;
     var border = 16;
     var size = this.size[0] - border * 2;;
@@ -2045,6 +2141,7 @@ class GraphNodeComponent extends React.Component {
     LiteGraph.registerNodeType("gfx/ModelNode", ModelNode);
     LiteGraph.registerNodeType("gfx/TextureBufferNode", TextureBufferNode);
     LiteGraph.registerNodeType("gfx/FeedbackNode", FeedbackNode);
+    LiteGraph.registerNodeType("gfx/FrameCountNode", FrameCountNode);
     // Load default json scene
     fetch('default_graph.json')
       .then(response => response.text())

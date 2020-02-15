@@ -3269,6 +3269,7 @@ supported callbacks:
       }
       this.widgets.push(w);
   this.size = this.computeSize();
+      this.setDirtyCanvas(true, true);
       return w;
   };
 
@@ -6786,7 +6787,11 @@ this.offset[1] += delta_offset[1];
           //apply transformations
           ctx.save();
           this.ds.toCanvasContext(ctx);
-
+            ctx.mozImageSmoothingEnabled = false;
+            ctx.oImageSmoothingEnabled = false;
+            ctx.webkitImageSmoothingEnabled = false;
+            ctx.msImageSmoothingEnabled = false;
+            ctx.imageSmoothingEnabled = false;
           //render BG
           if (
               this.background_image &&
@@ -6799,7 +6804,6 @@ this.offset[1] += delta_offset[1];
               } else {
                   ctx.globalAlpha = this.editor_alpha;
               }
-              ctx.imageSmoothingEnabled = ctx.mozImageSmoothingEnabled = ctx.imageSmoothingEnabled = false;
               if (
                   !this._bg_img ||
                   this._bg_img.name != this.background_image
@@ -6833,7 +6837,6 @@ this.offset[1] += delta_offset[1];
               }
 
               ctx.globalAlpha = 1.0;
-              ctx.imageSmoothingEnabled = ctx.mozImageSmoothingEnabled = ctx.imageSmoothingEnabled = true;
           }
 
           //groups
@@ -7420,6 +7423,11 @@ LGraphCanvas.prototype.drawLinkTooltip = function( ctx, link )
       ctx.shadowColor = "transparent";
 
       if (node.onDrawBackground) {
+        ctx.mozImageSmoothingEnabled = false;
+        ctx.oImageSmoothingEnabled = false;
+        ctx.webkitImageSmoothingEnabled = false;
+        ctx.msImageSmoothingEnabled = false;
+        ctx.imageSmoothingEnabled = false;
           node.onDrawBackground(ctx, this, this.canvas);
       }
 
