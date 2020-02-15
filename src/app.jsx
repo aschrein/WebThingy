@@ -7,6 +7,7 @@ import 'litegraph.js/css/litegraph.css'
 import AceEditor from 'react-ace';
 import 'brace/mode/glsl';
 import 'brace/theme/tomorrow_night_eighties';
+import 'brace/ext/language_tools';
 // import { JSONEditor } from 'react-json-editor-viewer';
 import * as dat from 'dat.gui';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -238,8 +239,9 @@ global_state.draw_triangle = (gl) => {
   gl.deleteShader(fragmentShader);
   gl.deleteProgram(program);
 };
-global_state.render_texture = (tex, format) => {
+global_state.render_texture = (tex, format, flipy) => {
   let gl = global_state.gl;
+  flipy = flipy || false;
   var pipeline = {
     vs:
       `#version 300 es
@@ -266,6 +268,9 @@ global_state.render_texture = (tex, format) => {
       }`,
 
   };
+  if (flipy) {
+    pipeline.vs = pipeline.vs.replace("uv.y = 1.0 - uv.y;", "uv.y = uv.y;");
+  }
   if (format) {
     switch (format) {
       case "RGBA32UI": {
@@ -515,6 +520,7 @@ global_state.draw = () => {
   Array.from(sorted_nodes).reverse().forEach(node => { if (node.gl_release) node.gl_release(global_state.gl) });
   global_state.litegraph_canvas.setDirty(true);
   global_state.frame_count += 1;
+  // global_state.periodic_draw = setTimeout(global_state.draw, 100);
 };
 global_state.update_thumbnails = () => {
   global_state.litegraph_canvas.setDirty(true);
@@ -656,38 +662,13 @@ class FrameCountNode extends MyLGraphNode {
   }
 }
 
-class ModelNode extends MyLGraphNode {
-  constructor() {
-    super();
-    this.title = "Model";
-    this.properties = {
-      fileurl: null,
-    };
-    this.onPropertyChange = (prop, val) => {
-      if (prop == "fileurl") {
-
-      }
-    };
-    this.addOutput("mesh", "mesh_t");
-    let url = 'models/gltf/DamagedHelmet/glTF/DamagedHelmet.gltf';
-    gltf_loader.load(url, (gltf) => {
-
-      this.gltf = gltf;
-      // this.meshes = [];
-      // gltf.scene.children.forEach(raw_mesh => {
-      // let mesh = new Mesh();
-      // this.init(raw_mesh);
-
-      // this.meshes.push(mesh);
-      // });
-      this.init(gltf.scene.children[0]);
-      // this.clean_outputs();
-
-    });
-    this.yoffset = 0;
+class Mesh {
+  init = (attributes, indices) => {
+    this.attributes = attributes;
+    this.indices = indices;
   }
 
-  init = (mesh) => {
+  init_gltf = (mesh) => {
     assert(mesh.type == "Mesh");
     BufferGeometryUtils.computeTangents(mesh.geometry);
     this.attributes = {};
@@ -729,39 +710,50 @@ class ModelNode extends MyLGraphNode {
   get_index_data = () => {
     return this.indices;
   }
+}
+
+class ModelNode extends MyLGraphNode {
+  constructor() {
+    super();
+    this.title = "Model";
+    this.properties = {
+      fileurl: null,
+    };
+    this.onPropertyChange = (prop, val) => {
+      if (prop == "fileurl") {
+
+      }
+    };
+    this.addOutput("mesh", "mesh_t");
+    this.meshes = [];
+    // let url = 'models/gltf/dieselpunk_hovercraft/scene.gltf';
+    let url = 'models/head_lee_perry_smith/scene.gltf';
+    gltf_loader.load(url, (gltf) => {
+      console.log(gltf);
+      this.gltf = gltf;
+      this.traverse(gltf.scene);
+    });
+    this.yoffset = 0;
+  }
+
+  traverse = (node) => {
+    if (node.type == "Mesh") {
+      let mesh = new Mesh();
+      mesh.init_gltf(node);
+      this.meshes.push(mesh);
+    } else {
+      node.children.forEach(child => this.traverse(child));
+    }
+  }
+
+  get_meshes = () => {
+    return this.meshes;
+  }
 
   onDrawBackground(ctx) {
     if (this.flags.collapsed) {
       return;
     }
-    // if (!this.meshes)
-    //   return;
-    // ctx.fillStyle = "#000";
-
-    // var yoffset = this.yoffset;
-    // var xoffset = 16;
-    // var border = 16;
-    // var size = this.size[0] - border * 2;
-    // Object.keys(this.scene.pbr_material).forEach(field => {
-    //   // console.log(typeof(this.scene.pbr_material[field]));
-    //   if (
-    //     this.scene.pbr_material[field] &&
-    //     typeof (this.scene.pbr_material[field]) == "object" &&
-    //     "image" in this.scene.pbr_material[field]) {
-    //     ctx.drawImage(
-    //       this.scene.pbr_material[field].image
-    //       , xoffset, yoffset, size, size);
-    //     yoffset += size + border;
-    //   }
-    // });
-
-    // yoffset += size + border;
-    // // this.size[0] = xoffset + size + border;
-    // this.size[1] = yoffset;
-    // // ctx.fillRect(0, 0, size[0], size[1]);
-    // ctx.strokeStyle = "#555";
-
-
   }
 
   display = (propnode) => {
@@ -789,6 +781,8 @@ class ModelNode extends MyLGraphNode {
           renderer.setSize(512, 512);
         renderer.render(scene, camera);
       };
+      var pmremGenerator = new THREE.PMREMGenerator(renderer);
+      pmremGenerator.compileEquirectangularShader();
       new RGBELoader()
         .setDataType(THREE.UnsignedByteType)
         .setPath('textures/equirectangular/')
@@ -811,64 +805,76 @@ class ModelNode extends MyLGraphNode {
 
       renderer.outputEncoding = THREE.sRGBEncoding;
 
-
-      var pmremGenerator = new THREE.PMREMGenerator(renderer);
-      pmremGenerator.compileEquirectangularShader();
+      let offset = 1.25;
+      const boundingBox = new THREE.Box3();
+      boundingBox.setFromObject(this.gltf.scene);
+      const size = boundingBox.getSize();
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const fov = camera.fov * (Math.PI / 180);
+      let cameraZ = Math.abs(maxDim / 4 * Math.tan(fov * 2));
+      cameraZ *= offset;
+      // camera.position.z = cameraZ;
+      const minZ = boundingBox.min.z;
+      const cameraToFarEdge = (minZ < 0) ? -minZ + cameraZ : cameraZ - minZ;
 
       controls = new OrbitControls(camera, renderer.domElement);
       controls.addEventListener('change', render);
-      controls.minDistance = 2;
-      controls.maxDistance = 20
-      controls.target.set(0, 0, - 0.2);
+      controls.minDistance = maxDim;
+      controls.maxDistance = 1000;
+      controls.target.set(0, 0, 0);
       controls.update();
+
       camera.aspect = 1.0;
+      camera.far = 1000;
+      camera.far = cameraToFarEdge * 3;
+
       camera.updateProjectionMatrix();
 
 
       renderer.render(scene, camera);
     }
     div.appendChild(canvas2);
-    // propnode.datgui = {};
-    let folder = propnode.datgui.addFolder("Attributes");
-    for (let i in this.attributes) {
-      let tmp = {
-        prop: () => { },
-      };
-      folder.add(tmp, "prop").name(i);
-    }
-    folder.open();
+
+    // let folder = propnode.datgui.addFolder("Attributes");
+    // for (let i in this.attributes) {
+    //   let tmp = {
+    //     prop: () => { },
+    //   };
+    //   folder.add(tmp, "prop").name(i);
+    // }
+    // folder.open();
     propnode.datgui.domElement.appendChild(div);
     div.width = 512;
-    {
-      let ctx = canvas2.getContext("2d");
-      var yoffset = 0;
-      var xoffset = 64;
-      var border = 16;
-      var size = 256;
-      canvas2.width = xoffset + size;
-      var height = 0;
-      var images = [];
-      Object.keys(this.pbr_material).forEach(field => {
-        if (
-          this.pbr_material[field] &&
-          typeof (this.pbr_material[field]) == "object" &&
-          "image" in this.pbr_material[field]) {
-          images.push({ name: field, img: this.pbr_material[field].image });
-          height += size + border;
-        }
-      });
-      canvas2.height = height;
-      div.height = height + 256;
+    // {
+    //   let ctx = canvas2.getContext("2d");
+    //   var yoffset = 0;
+    //   var xoffset = 64;
+    //   var border = 16;
+    //   var size = 256;
+    //   canvas2.width = xoffset + size;
+    //   var height = 0;
+    //   var images = [];
+    //   Object.keys(this.pbr_material).forEach(field => {
+    //     if (
+    //       this.pbr_material[field] &&
+    //       typeof (this.pbr_material[field]) == "object" &&
+    //       "image" in this.pbr_material[field]) {
+    //       images.push({ name: field, img: this.pbr_material[field].image });
+    //       height += size + border;
+    //     }
+    //   });
+    //   canvas2.height = height;
+    //   div.height = height + 256;
 
-      images.forEach(img => {
-        ctx.fillStyle = "white";
-        ctx.fillText(img.name, 0, yoffset + 16);
-        ctx.drawImage(
-          img.img
-          , xoffset, yoffset, size, size);
-        yoffset += size + border;
-      });
-    }
+    //   images.forEach(img => {
+    //     ctx.fillStyle = "white";
+    //     ctx.fillText(img.name, 0, yoffset + 16);
+    //     ctx.drawImage(
+    //       img.img
+    //       , xoffset, yoffset, size, size);
+    //     yoffset += size + border;
+    //   });
+    // }
   }
 }
 
@@ -962,7 +968,7 @@ class BackBufferNode extends MyLGraphNode {
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 1, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    global_state.render_texture(tex);
+    global_state.render_texture(tex, "RGBA32F", true);
   }
 
   update_thumbnails = () => {
@@ -1263,14 +1269,8 @@ class VertexBufferNode extends MyLGraphNode {
     this.set_dirty();
   }
 
-  get_attrib_data = (name) => {
-    if (!(name in this.buf.attributes))
-      return null;
-    return this.buf.attributes[name];
-  }
-
-  get_index_data = () => {
-    return this.buf.indices;
+  get_meshes = () => {
+    return [this.mesh];
   }
 
   parse_src = () => {
@@ -1286,10 +1286,12 @@ class VertexBufferNode extends MyLGraphNode {
       let json = JSON.parse(text);
       assert(json);
       assert(json.attributes);
-      this.buf = json;
+      let mesh = new Mesh();
+      mesh.init(json.attributes, json.indices);
+      this.mesh = mesh;
     } catch (e) {
       console.log(e);
-      this.buf = {};
+      this.mesh = null;
     }
   }
 
@@ -1526,57 +1528,60 @@ class DrawCallNode extends MyLGraphNode {
     if (!mesh_input)
       return;
     this.gl = {};
-    this.gl.arr = gl.createVertexArray();
-    gl.bindVertexArray(this.gl.arr);
+    this.gl.arrays = [];
     this.gl.buffers = [];
-    for (let i in this.attributes) {
-      let attrib = this.attributes[i];
-      let out_attrib = mesh_input.get_attrib_data(attrib.name);
-      if (!out_attrib)
-        continue;
-      assert(out_attrib.type == attrib.type);
-      let data = out_attrib.data;
-      let arr = new Float32Array(data);
+    let meshes = mesh_input.get_meshes();
+    meshes.forEach(mesh => {
+      let arr = gl.createVertexArray();
+      this.gl.arrays.push(arr);
+      gl.bindVertexArray(arr);
 
-      var gl_buffer = gl.createBuffer();
-      this.gl.buffers.push(gl_buffer);
-      gl.bindBuffer(gl.ARRAY_BUFFER, gl_buffer);
-      gl.bufferData(gl.ARRAY_BUFFER, arr, gl.STATIC_DRAW);
-      let loc = pipeline.get_attrib_location(gl, attrib.name);
-      if (loc < 0)
-        continue;
-      var comps = -1;
-      switch (attrib.type) {
-        case "vec2":
-          comps = 2;
-          break;
-        case "vec3":
-          comps = 3;
-          break;
-        default:
-          throw Error("unrecognized type");
-      };
-      gl.vertexAttribPointer(loc, comps, gl.FLOAT, false, 0, 0);
-      gl.enableVertexAttribArray(loc);
-    }
-    this.draw_size = 3;
-    {
+      for (let i in this.attributes) {
+        let attrib = this.attributes[i];
+        let out_attrib = mesh.get_attrib_data(attrib.name);
+        if (!out_attrib)
+          continue;
+        assert(out_attrib.type == attrib.type);
+        let data = out_attrib.data;
+        var gl_buffer = gl.createBuffer();
+        this.gl.buffers.push(gl_buffer);
+        gl.bindBuffer(gl.ARRAY_BUFFER, gl_buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.STATIC_DRAW);
+        let loc = pipeline.get_attrib_location(gl, attrib.name);
+        if (loc < 0)
+          continue;
+        var comps = -1;
+        switch (attrib.type) {
+          case "vec2":
+            comps = 2;
+            break;
+          case "vec3":
+            comps = 3;
+            break;
+          default:
+            throw Error("unrecognized type");
+        };
+        gl.vertexAttribPointer(loc, comps, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(loc);
+      }
+      arr.draw_size = 3;
+      {
+        let buf = mesh.get_index_data();
+        assert("data" in buf);
+        const indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        this.gl.buffers.push(indexBuffer);
+        assert(buf.type == "uint16");
+        gl.bufferData(
+          gl.ELEMENT_ARRAY_BUFFER,
+          new Uint16Array(buf.data),
+          gl.STATIC_DRAW
+        );
+        arr.draw_size = buf.data.length;
 
-      let buf = mesh_input.get_index_data();
-      assert("data" in buf);
-      const indexBuffer = gl.createBuffer();
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-      this.gl.buffers.push(indexBuffer);
-      assert(buf.type == "uint16");
-      gl.bufferData(
-        gl.ELEMENT_ARRAY_BUFFER,
-        new Uint16Array(buf.data),
-        gl.STATIC_DRAW
-      );
-      this.draw_size = buf.data.length;
-
-    }
-    this.index_type = gl.UNSIGNED_SHORT;
+      }
+      arr.index_type = gl.UNSIGNED_SHORT;
+    });
   }
 
   display = (propnode) => {
@@ -1671,14 +1676,18 @@ class DrawCallNode extends MyLGraphNode {
         };
       }
     }
-    gl.bindVertexArray(this.gl.arr);
-    gl.drawElements(gl.TRIANGLES, this.draw_size, this.index_type, 0);
+    this.gl.arrays.forEach(arr => {
+      gl.bindVertexArray(arr);
+
+      gl.drawElements(gl.TRIANGLES, arr.draw_size, arr.index_type, 0);
+    });
+
 
   }
 
   gl_release = (gl) => {
     this.gl.buffers.forEach(buf => gl.deleteBuffer(buf));
-    gl.deleteVertexArray(this.gl.arr);
+    this.gl.arrays.forEach(buf => gl.deleteVertexArray(buf));
     delete this.gl;
   }
 
@@ -2229,15 +2238,15 @@ class GraphNodeComponent extends React.Component {
         <Button style={{ margin: 10 }} onClick={() => { console.log(global_state.litegraph_canvas.selected_nodes); }}>
           log selection
                 </Button>
-        <Button style={{ margin: 10 }} onClick={() => { global_state.exec_reset(); }}>
+        <Button variant="danger" style={{ margin: 10 }} onClick={() => { global_state.exec_reset(); }}>
           clear graph
                 </Button>
 
         <Button style={{ margin: 10 }} onClick={() => {
           // console.log(global_state.toposort());
           global_state.draw();
-        }}>
-          draw
+        }} variant="success" >
+          Render
                 </Button>
         <LoadGraphButton />
         <canvas id='tmp_canvas' style={{ border: '1px solid' }}></canvas>
@@ -2345,6 +2354,8 @@ class TextEditorComponent extends React.Component {
     this.props.glContainer.on('resize', this.onResize);
     this.edit_src(null);
     this.rebuildGui();
+    // ace.require("ace/ext/language_tools");
+
   }
 
   edit_src = (name) => {
@@ -2356,6 +2367,20 @@ class TextEditorComponent extends React.Component {
     assert(name in global_state.litegraph.config.srcs);
     this.selected_src = name;
     this.refs.editor.editor.setValue(global_state.litegraph.config.srcs[name].code);
+    this.refs.editor.editor.setOptions({
+      // fontFamily: "Consolas",
+      // enableSnippets: true,
+      // enableBasicAutocompletion: true,
+      // enableLiveAutocompletion: true,
+      fontSize: "8pt"
+    });
+    this.refs.editor.editor.setAutoScrollEditorIntoView(true);
+    this.refs.editor.editor.getSession().setOptions({
+      tabSize: 2,
+      useSoftTabs: true,
+      navigateWithinSoftTabs: true
+      
+    });
   }
 
   add_src = (name) => {
@@ -2400,6 +2425,8 @@ class TextEditorComponent extends React.Component {
           editorProps={{
             $blockScrolling: true
           }}
+          enableBasicAutocompletion={true}
+          enableLiveAutocompletion={true}
           autoScrollEditorIntoView={false}
           wrapEnabled={false}
           height="calc(100% - 100px)"

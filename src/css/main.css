@@ -4,6 +4,7 @@
 
 body {
   height: 100vh;
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
 }
 
 .lm_root {
