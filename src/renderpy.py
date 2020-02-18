@@ -24,14 +24,76 @@ WIDTH, HEIGHT = 512, 512
 class Node:
   def __init__(self, global_state, json_node):
     self.id = json_node["id"]
+    global_state.id2node[self.id] = self
+    self.global_state = global_state
     self.title = json_node["title"]
     self.outputs = []
     self.inputs = []
+    self.is_recursive = False
     for o in json_node["outputs"]:
       self.outputs.append(o)
     for o in json_node["inputs"]:
       self.inputs.append(o)
     self.properties = json_node["properties"]
+
+  def get_output_by_name(self, name):
+    i = 0
+    for o in self.outputs:
+      if o["name"] == name:
+        return (i, o)
+      i += 1
+    return None
+
+  def get_input_ids(self):
+    out = set()
+    for o in self.inputs:
+      link_id = o["link"]
+      if link_id:
+        link = self.global_state.id2link[link_id]
+        out.add(link.origin_node_id)
+    return out
+
+  def get_input_node_by_slot(self, slot):
+    link_id = self.inputs[slot]["link"]
+    link = self.global_state.id2link[link_id]
+    return self.global_state.id2node[link.origin_node_id]
+
+  def get_input_nodes(self):
+    out = []
+    for o in self.inputs:
+      link_id = o["link"]
+      if link_id:
+        link = self.global_state.id2link[link_id]
+        out.add(self.global_state.id2node[link.origin_node_id])
+    return out
+
+  def getInputNodeByName(self, name):
+    for o in self.inputs:
+      if o["name"] == name:
+        link_id = o["link"]
+        if link_id:
+          link = self.global_state.id2link[link_id]
+          return self.global_state.id2node[link.origin_node_id]
+    return None
+
+  def getInputLinkByName(self, name):
+    for o in self.inputs:
+      if o["name"] == name:
+        link_id = o["link"]
+        if link_id:
+          return self.global_state.id2link[link_id]
+    return None
+
+
+class Link:
+  def __init__(self, global_state, json_node):
+    self.id = json_node[0]
+    global_state.id2link[self.id] = self
+    self.global_state = global_state
+    self.origin_node_id = json_node[1]
+    self.origin_slot = json_node[2]
+    self.target_node_id = json_node[3]
+    self.target_slot_id = json_node[4]
 
 
 class PipelineNode(Node):
@@ -50,21 +112,54 @@ class BackBufferNode(Node):
   def __init__(self, global_state, json_node):
     super().__init__(global_state, json_node)
 
+  def gl_render(self):
+    in_node = self.getInputNodeByName("in")
+    if in_node == None:
+      return
+    input_link = self.getInputLinkByName("in")
+    tex = in_node.get_texture(input_link.origin_slot)
+
+    gl.glDisable(gl.GL_CULL_FACE)
+    gl.glDisable(gl.GL_DEPTH_TEST)
+    gl.glDisable(gl.GL_DEPTH_TEST)
+    gl.glDisable(gl.GL_SCISSOR_TEST)
+    gl.glDepthFunc(gl.GL_LEQUAL)
+    gl.glBlendFunc(gl.GL_ONE, gl.GL_ONE)
+
+    gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, null)
+    gl.glDrawBuffers([gl.GL_BACK])
+    gl.glViewport(0, 0, global_state.width, global_state.height)
+    gl.glClearColor(0, 0, 1, 1)
+    gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+    global_state.render_texture(tex, "RGBA32F", True)
+
 
 class FrameCountNode(Node):
   def __init__(self, global_state, json_node):
     super().__init__(global_state, json_node)
+
+  def get_value(self, slot):
+    return self.global_state.frame_count
 
 
 class Mesh:
   def __init__(self):
     pass
 
+  def get_attrib_data(self, name):
+    return {"data": np.float32([1.0, 0.0, 0.0]), "type": "vec3"}
+
+  def get_index_data(self):
+    return {"data": np.uint32([0, 1, 2]), "type": "uint32"}
+
 
 class ModelNode(Node):
   def __init__(self, global_state, json_node):
     super().__init__(global_state, json_node)
     assert("fileurl" in self.properties)
+
+  def get_meshes(self):
+    return []
 
 
 class VertexBufferNode(Node):
@@ -88,12 +183,21 @@ class DrawCallNode(Node):
 class FeedbackNode(Node):
   def __init__(self, global_state, json_node):
     super().__init__(global_state, json_node)
+    self.is_recursive = True
 
 
 class PassNode(Node):
   def __init__(self, global_state, json_node):
     super().__init__(global_state, json_node)
-    assert("viewport" in self.properties and "rts" in self.properties)
+    assert("viewport" in self.properties and (
+        "rts" in self.properties or "depth" in self.properties))
+
+  def gl_render(self):
+    self.bind(gl)
+    for i, input in enumerate(self.inputs):
+      if input["type"] == "drawcall_t":
+        node = get_input_node_by_slot(i)
+        node.gl_draw()
 
 
 class GlobalState:
@@ -102,13 +206,37 @@ class GlobalState:
     self.id2node = {}
     self.links = []
     self.id2link = {}
+    self.frame_count = 0
     pass
 
   def toposort(self):
     """
     Returns the list of nodes in inverse topological order
     """
-    pass
+    sorted = []
+    unsorted = []
+    unsorted_set = set()
+    for node in self.nodes:
+      if node.is_recursive:
+        continue
+      unsorted_set.add(node.id)
+      unsorted.append(node)
+    while len(unsorted_set) != 0:
+      node = unsorted.pop(0)
+      is_ready = True
+      for id in node.get_input_ids():
+        if id in unsorted_set:
+          is_ready = False
+          break
+      if is_ready:
+        sorted.append(node)
+        unsorted_set.remove(node.id)
+      else:
+        unsorted.append(node)
+    for node in self.nodes:
+      if node.is_recursive:
+        sorted.append(node)
+    return sorted
 
   def load_json(self, filename):
     self.json = json.load(open(filename))
@@ -140,7 +268,8 @@ class GlobalState:
       else:
         assert(False and "unknown node type")
 
-    pass
+    for json_link in self.json["links"]:
+      self.links.append(Link(self, json_link))
 
   def render_triangle(self):
     vsSource = """#version 300 es
@@ -249,6 +378,8 @@ class GlobalState:
             "uniform sampler2D", "uniform usampler2D")
       elif format == "RGBA32F":
         pass
+      elif format == "RGBA8UN":
+        pass
       else:
         raise "unknown format"
 
@@ -296,10 +427,10 @@ class GlobalState:
     gl.glDeleteVertexArrays(1, triangleArray)
     gl.glDeleteProgram(program)
 
-  def create_texture(self, data, width, height, format="RGBA8U"):
+  def create_texture(self, data, width, height, format="RGBA8UN"):
     texture = gl.glGenTextures(1)
     gl.glBindTexture(gl.GL_TEXTURE_2D, texture)
-    assert(format == "RGBA8U")
+    assert(format == "RGBA8UN")
     level = 0
     internalFormat = gl.GL_RGBA
     border = 0
@@ -310,10 +441,66 @@ class GlobalState:
                     format, type, data)
     return texture
 
+  def get_texture_data(self, tex, format, width, height):
+    targetTexture = gl.glGenTextures(1)
+    gl.glBindTexture(gl.GL_TEXTURE_2D, targetTexture)
+
+    gl.glTexImage2D(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA,
+                    width, height, 0,
+                    gl.GL_RGBA, gl.GL_UNSIGNED_BYTE, None)
+
+    # set the filtering so we don't need mips
+    gl.glTexParameteri(
+        gl.GL_TEXTURE_2D, gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR)
+    gl.glTexParameteri(
+        gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE)
+    gl.glTexParameteri(
+        gl.GL_TEXTURE_2D, gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)
+
+    # Create and bind the framebuffer
+    fb = gl.glGenFramebuffers(1)
+    gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, fb)
+    gl.glFramebufferTexture2D(
+        gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0, gl.GL_TEXTURE_2D, targetTexture, 0)
+
+    gl.glDisable(gl.GL_CULL_FACE)
+    gl.glDisable(gl.GL_DEPTH_TEST)
+    gl.glDisable(gl.GL_DEPTH_TEST)
+    gl.glDisable(gl.GL_SCISSOR_TEST)
+    gl.glDepthFunc(gl.GL_LEQUAL)
+    gl.glBlendFunc(gl.GL_ONE, gl.GL_ONE)
+
+    gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, fb)
+    gl.glDrawBuffers([gl.GL_COLOR_ATTACHMENT0])
+    gl.glViewport(0, 0, width, height)
+    gl.glClearColor(0, 0, 1, 1)
+    gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+
+    self.render_texture(tex, format)
+
+    img_buf = gl.glReadPixelsub(
+        0, 0, width, height, gl.GL_RGBA, gl.GL_UNSIGNED_BYTE)
+    img = np.frombuffer(img_buf, np.uint8).reshape(height, width, 4)[::-1]
+
+    gl.glDeleteFramebuffers(1, fb)
+    gl.glDeleteTextures(1, targetTexture)
+    return img
+
   def render(self):
     """
     Evaluates the frame graph
     """
+    sorted = self.toposort()
+    for node in sorted:
+      if hasattr(node, 'gl_init'):
+        node.gl_init()
+    for node in sorted:
+      if hasattr(node, 'gl_render'):
+        node.gl_render()
+    for node in reversed(sorted):
+      if hasattr(node, 'gl_release'):
+        node.gl_release()
+    self.frame_count += 1
     pass
 
   def release(self):
@@ -329,28 +516,32 @@ def showScreen():
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
   gl.glClear(gl.GL_COLOR_BUFFER_BIT)
   try:
-    tex = global_state.create_texture(np.uint8([
-      255, 128, 0, 255,
-      0, 128, 0, 255,
-      0, 128, 170, 255,
-      255, 128, 254, 255,
-      ]), 2, 2)
+    # tex = global_state.create_texture(np.uint8([
+    #     255, 128, 0, 255,
+    #     0, 128, 0, 255,
+    #     0, 128, 170, 255,
+    #     255, 128, 254, 255,
+    # ]), 2, 2)
     # global_state.render_triangle()
-    global_state.render_texture(tex)
+    global_state.render()
     img_buf = gl.glReadPixelsub(
         0, 0, WIDTH, HEIGHT, gl.GL_RGB, gl.GL_UNSIGNED_BYTE)
     img = np.frombuffer(img_buf, np.uint8).reshape(HEIGHT, WIDTH, 3)[::-1]
     fig, ax = plt.subplots()
     im = ax.imshow(img/255, interpolation='bilinear',
                    origin='upper')
+    # im = ax.imshow(global_state.get_texture_data(tex, "RGBA8UN", 2, 2)/255, interpolation='bilinear',
+    #                origin='upper')
 
     plt.show()
+
     glutSwapBuffers()
   except Exception as e:
     import traceback
     traceback.print_exc()
     print(e)
   exit()
+
 
 glutInit()
 glutInitDisplayMode(GLUT_RGBA)
