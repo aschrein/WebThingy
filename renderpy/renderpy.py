@@ -576,7 +576,7 @@ class PassNode(Node):
     gl.glClearColor(0, 0, 1, 1)
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 
-    global_state.render_texture(srcTexture)
+    self.global_state.render_texture(srcTexture)
 
     gl.glDeleteFramebuffers(1, fb)
     return targetTexture
