@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import numpy as np
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
@@ -7,8 +5,6 @@ import matplotlib.cbook as cbook
 from matplotlib.path import Path
 from matplotlib.patches import PathPatch
 import json
-
-# print(json.load(open("../public/default_graph.json")))public/models/LeePerrySmith/LeePerrySmith.gltf
 
 import OpenGL
 from OpenGL.GL import shaders
@@ -23,12 +19,6 @@ def glDrawBuffers(buf):
       gl.glDrawBuffers(buf)
   except OpenGL.GL.GLError as err:
     assert err.err == 1280
-
-# import trimesh
-# # trimesh.util.attach_to_log()
-# mesh = trimesh.load('public/models/LeePerrySmith/LeePerrySmith.gltf')
-# mesh.show()
-
 
 # Attribute dictionary
 # used to hack python into making javascript like objects-dictionaries
@@ -238,7 +228,7 @@ class ModelNode(Node):
     # from pygltflib import GLTF2, Scene
     # trimesh.util.attach_to_log()
     # scene = trimesh.load('public/models/LeePerrySmith/LeePerrySmith.gltf')
-    scene = trimesh.load('public/models/head_lee_perry_smith/scene.gltf')
+    scene = trimesh.load(self.global_state.fileroot + 'head_lee_perry_smith/scene.gltf')
     for name, geom in scene.geometry.items():
       mesh = Mesh()
       mesh.init_gltf(geom)
@@ -659,6 +649,7 @@ class GlobalState:
     self.frame_count = 0
     self.width = 512
     self.height = 512
+    self.fileroot = "public/models/"
     pass
 
   def toposort(self):
@@ -963,69 +954,67 @@ class GlobalState:
     pass
 
 
-global_state = GlobalState()
-global_state.load_json("public/default_graph.json")
-
 # import OpenGL.GLUT as glut
 
 import OpenGL.GLU as glu
 import OpenGL.GLUT as glut
-def showScreen():
-  global global_state
-  gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-  try:
-    # tex = global_state.create_texture(np.uint8([
-    #     255, 128, 0, 255,
-    #     0, 128, 0, 255,
-    #     0, 128, 170, 255,
-    #     255, 128, 254, 255,
-    # ]), 2, 2)
-    # global_state.render_triangle()
-    global_state.render()
-    # print(gl.glGetError())
-    # gl.glDrawBuffers([int(gl.GL_COLOR_ATTACHMENT0)])
-    # gl.glClear(gl.GL_COLOR_BUFFER_BIT)
-    # gl.glBegin(gl.GL_TRIANGLES)
-    # gl.glColor3f(1.0, 0.0, 0.0)
-    # gl.glVertex2f(0,  1)
-    # gl.glColor3f(0.0, 1.0, 0.0)
-    # gl.glVertex2f(-1, -1)
-    # gl.glColor3f(0.0, 0.0, 1.0)
-    # gl.glVertex2f(1, -1)
-    # gl.glEnd()
-    # img_buf = gl.glReadPixelsub(
-    #     0, 0, global_state.width, global_state.height, gl.GL_RGB, gl.GL_UNSIGNED_BYTE)
-    # img = np.frombuffer(img_buf, np.uint8).reshape(global_state.width, global_state.height, 3)[::-1]
-    # fig, ax = plt.subplots()
-    # im = ax.imshow(img/255, interpolation='bilinear',
-    #                origin='upper')
-    # # im = ax.imshow(global_state.get_texture_data(tex, "RGBA8UN", 2, 2)/255, interpolation='bilinear',
-    # #                origin='upper')
 
-    # plt.show()
+if __name__ == '__main__':
+  global_state = GlobalState()
+  global_state.load_json("public/default_graph.json")
+  def showScreen():
+    global global_state
+    gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+    try:
+      # tex = global_state.create_texture(np.uint8([
+      #     255, 128, 0, 255,
+      #     0, 128, 0, 255,
+      #     0, 128, 170, 255,
+      #     255, 128, 254, 255,
+      # ]), 2, 2)
+      # global_state.render_triangle()
+      global_state.render()
+      # print(gl.glGetError())
+      # gl.glDrawBuffers([int(gl.GL_COLOR_ATTACHMENT0)])
+      # gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+      # gl.glBegin(gl.GL_TRIANGLES)
+      # gl.glColor3f(1.0, 0.0, 0.0)
+      # gl.glVertex2f(0,  1)
+      # gl.glColor3f(0.0, 1.0, 0.0)
+      # gl.glVertex2f(-1, -1)
+      # gl.glColor3f(0.0, 0.0, 1.0)
+      # gl.glVertex2f(1, -1)
+      # gl.glEnd()
+      # img_buf = gl.glReadPixelsub(
+      #     0, 0, global_state.width, global_state.height, gl.GL_RGB, gl.GL_UNSIGNED_BYTE)
+      # img = np.frombuffer(img_buf, np.uint8).reshape(global_state.width, global_state.height, 3)[::-1]
+      # fig, ax = plt.subplots()
+      # im = ax.imshow(img/255, interpolation='bilinear',
+      #                origin='upper')
+      # # im = ax.imshow(global_state.get_texture_data(tex, "RGBA8UN", 2, 2)/255, interpolation='bilinear',
+      # #                origin='upper')
 
-    glut.glutSwapBuffers()
-  except Exception as e:
-    import traceback
-    traceback.print_exc()
-    print(e)
+      # plt.show()
 
+      glut.glutSwapBuffers()
+    except Exception as e:
+      import traceback
+      traceback.print_exc()
+      print(e)
+  glut.glutInit()
+  glut.glutInitContextVersion(4, 5)
+  glut.glutInitContextFlags(glut.GLUT_FORWARD_COMPATIBLE)
+  glut.glutInitContextProfile(glut.GLUT_CORE_PROFILE)
+  glut.glutInitDisplayMode(glut.GLUT_RGBA | glut.GLUT_DOUBLE | glut.GLUT_DEPTH)
+  glut.glutInitWindowSize(global_state.width, global_state.height)
+  glut.glutInitWindowPosition(0, 0)
+  wind = glut.glutCreateWindow("OpenGL Coding Practice")
+  glut.glutDisplayFunc(showScreen)
+  glut.glutIdleFunc(showScreen)
+  print(gl.glGetString(gl.GL_VERSION))
+  print(gl.glGetString(gl.GL_VENDOR))
 
-
-glut.glutInit()
-glut.glutInitContextVersion(4, 5)
-glut.glutInitContextFlags(glut.GLUT_FORWARD_COMPATIBLE)
-glut.glutInitContextProfile(glut.GLUT_CORE_PROFILE)
-glut.glutInitDisplayMode(glut.GLUT_RGBA | glut.GLUT_DOUBLE | glut.GLUT_DEPTH)
-glut.glutInitWindowSize(global_state.width, global_state.height)
-glut.glutInitWindowPosition(0, 0)
-wind = glut.glutCreateWindow("OpenGL Coding Practice")
-glut.glutDisplayFunc(showScreen)
-glut.glutIdleFunc(showScreen)
-print(gl.glGetString(gl.GL_VERSION))
-print(gl.glGetString(gl.GL_VENDOR))
-
-glut.glutMainLoop()
+  glut.glutMainLoop()
 # import unittest, pygame, pygame.display, time, os
 # import logging 
 # logging.basicConfig(level=logging.INFO)
