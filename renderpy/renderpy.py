@@ -956,10 +956,10 @@ class GlobalState:
 
 # import OpenGL.GLUT as glut
 
-import OpenGL.GLU as glu
-import OpenGL.GLUT as glut
 
 if __name__ == '__main__':
+  import OpenGL.GLU as glu
+  import OpenGL.GLUT as glut
   global_state = GlobalState()
   global_state.load_json("public/default_graph.json")
   def showScreen():
