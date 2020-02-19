@@ -182,7 +182,7 @@ class BackBufferNode(Node):
     gl.glViewport(0, 0, self.global_state.width, self.global_state.height)
     gl.glClearColor(0, 0, 1, 1)
     gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-    global_state.render_texture(tex, "RGBA32F", True)
+    self.global_state.render_texture(tex, "RGBA32F", True)
 
 
 class FrameCountNode(Node):
