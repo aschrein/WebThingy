@@ -227,8 +227,8 @@ class ModelNode(Node):
     self.meshes = []
     # from pygltflib import GLTF2, Scene
     # trimesh.util.attach_to_log()
-    # scene = trimesh.load('public/models/LeePerrySmith/LeePerrySmith.gltf')
-    scene = trimesh.load(self.global_state.fileroot + 'head_lee_perry_smith/scene.gltf')
+    scene = trimesh.load(self.global_state.fileroot + 'models/LeePerrySmith/LeePerrySmith.gltf')
+    # scene = trimesh.load(self.global_state.fileroot + 'head_lee_perry_smith/scene.gltf')
     for name, geom in scene.geometry.items():
       mesh = Mesh()
       mesh.init_gltf(geom)
@@ -649,7 +649,7 @@ class GlobalState:
     self.frame_count = 0
     self.width = 512
     self.height = 512
-    self.fileroot = "public/models/"
+    self.fileroot = "public/"
     pass
 
   def toposort(self):

@@ -727,7 +727,7 @@ class ModelNode extends MyLGraphNode {
     this.addOutput("mesh", "mesh_t");
     this.meshes = [];
     // let url = 'models/gltf/dieselpunk_hovercraft/scene.gltf';
-    let url = 'models/head_lee_perry_smith/scene.gltf';
+    let url = 'models/LeePerrySmith/LeePerrySmith.gltf';
     gltf_loader.load(url, (gltf) => {
       console.log(gltf);
       this.gltf = gltf;
