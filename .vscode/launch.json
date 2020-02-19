@@ -5,6 +5,13 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Python: Current File",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/renderpy.py",
+      "console": "integratedTerminal"
+    },
+    {
       "type": "chrome",
       "runtimeExecutable": "/usr/bin/chromium",
       "request": "launch",

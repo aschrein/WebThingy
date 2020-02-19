@@ -1019,11 +1019,11 @@ class PipelineNode extends MyLGraphNode {
     this.properties = {
       vs: null,
       ps: null,
+      attributes: null,
+      uniforms: null
     };
     this.addOutput("out", "pipeline_t");
     this.title = "Pipeline";
-    this.attributes = [];
-    this.uniforms = [];
     this.valid = false;
     global_state.exec_after('remove_src', (cmd) => {
       if (cmd.src_name == this.vs) {
@@ -1154,9 +1154,9 @@ class PipelineNode extends MyLGraphNode {
   }
 
   get_info = () => {
-    if (this.attributes.length == 0)
+    if (!this.valid)
       this.parse_shaders();
-    return { attributes: this.attributes, uniforms: this.uniforms, valid: this.valid };
+    return { attributes: this.properties.attributes, uniforms: this.properties.uniforms, valid: this.valid };
   }
 
   parse_shaders = () => {
@@ -1164,8 +1164,8 @@ class PipelineNode extends MyLGraphNode {
     this.valid = false;
     let uniform_set = new Set();
 
-    this.attributes = [];
-    this.uniforms = [];
+    this.properties.attributes = [];
+    this.properties.uniforms = [];
     if (this.properties.vs != null) {
       try {
         // Parse vertex shader for attributes
@@ -1176,7 +1176,7 @@ class PipelineNode extends MyLGraphNode {
         // console.log(str);
         for (var i = 0; i < json.attributes.length - 1; i++) {
           let attrib = json.attributes[i];
-          this.attributes.push({ name: attrib.name, type: attrib.type });
+          this.properties.attributes.push({ name: attrib.name, type: attrib.type });
         }
         for (var i = 0; i < json.uniforms.length - 1; i++) {
           let uniform = json.uniforms[i];
@@ -1186,7 +1186,7 @@ class PipelineNode extends MyLGraphNode {
           if (uniform.name[0] == "_")
             continue;
           uniform_set.add(uniform.name);
-          this.uniforms.push({ name: uniform.name, type: uniform.type });
+          this.properties.uniforms.push({ name: uniform.name, type: uniform.type });
         }
         // ps uniform parsing
         {
@@ -1201,7 +1201,7 @@ class PipelineNode extends MyLGraphNode {
             if (uniform.name[0] == "_")
               continue;
             uniform_set.add(uniform.name);
-            this.uniforms.push({ name: uniform.name, type: uniform.type });
+            this.properties.uniforms.push({ name: uniform.name, type: uniform.type });
           }
         }
         this.valid = true;
@@ -1210,8 +1210,6 @@ class PipelineNode extends MyLGraphNode {
         return null;
       }
     }
-    // console.log(this.attributes);
-    return { attributes: this.attributes, uniforms: this.uniforms };
   }
 
   onSelected() {
@@ -2236,17 +2234,17 @@ class GraphNodeComponent extends React.Component {
           Copy to clipboard
                 </Button>
         <Button style={{ margin: 10 }} onClick={() => { console.log(global_state.litegraph_canvas.selected_nodes); }}>
-          log selection
+          Dump Selected
                 </Button>
         <Button variant="danger" style={{ margin: 10 }} onClick={() => { global_state.exec_reset(); }}>
-          clear graph
+          Clear
                 </Button>
 
         <Button style={{ margin: 10 }} onClick={() => {
           // console.log(global_state.toposort());
           global_state.draw();
         }} variant="success" >
-          Render
+          Next Frame
                 </Button>
         <LoadGraphButton />
         <canvas id='tmp_canvas' style={{ border: '1px solid' }}></canvas>
