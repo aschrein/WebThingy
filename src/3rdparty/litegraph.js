@@ -5226,9 +5226,9 @@ if( !skip_action && isInsideRectangle( e.canvasX, e.canvasY, node.pos[0], node.p
           }
         }
 
-        if (is_double_click && !this.read_only && this.allow_searchbox) {
-          this.showSearchBox(e);
-        }
+        // if (is_double_click && !this.read_only && this.allow_searchbox) {
+        //   this.showSearchBox(e);
+        // }
 
         clicking_canvas_bg = true;
       }

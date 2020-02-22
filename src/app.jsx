@@ -21,10 +21,10 @@ import { BufferGeometryUtils } from 'three/examples/jsm/utils/BufferGeometryUtil
 // import { RoughnessMipmapper } from 'three/examples/jsm/utils/RoughnessMipmapper.js';
 
 var LG = require('./3rdparty/litegraph');
-let LGraph = LG.LGraph;
-let LGraphCanvas = LG.LGraphCanvas;
-let LiteGraph = LG.LiteGraph;
-let LGraphNode = LG.LGraphNode;
+var LGraph = LG.LGraph;
+var LGraphCanvas = LG.LGraphCanvas;
+var LiteGraph = LG.LiteGraph;
+var LGraphNode = LG.LGraphNode;
 
 let isSetsEqual = (a, b) => a.size === b.size && [...a].every(value => b.has(value));
 function assert(condition) {
@@ -37,12 +37,84 @@ function assert(condition) {
   }
 }
 
-// Actually, lets make a global state object
 let global_state = {};
-// Reference to the litegraph instance
-global_state.litegraph = new LGraph();
+
+global_state.on_resize = (width, height) => {
+  if ("litegraph_canvas" in global_state && global_state.litegraph)
+    global_state.litegraph_canvas.resize(width, height);
+};
+
 function init_litegraph(json) {
-  global_state.litegraph.clear();
+  // Setup per window
+  let random_string = "d8e605d156e5efb221c3198dcd4bcba2";
+  if (!(random_string in window)) {
+    global_state.litegraph = new LGraph();
+    global_state.litegraph_canvas = new LGraphCanvas("#tmp_canvas", global_state.litegraph);
+    global_state._selected_nodes = {};
+    global_state.litegraph_canvas.onSelectionChange = (
+      nodes
+    ) => {
+      let new_selected = [];
+      let new_deselected = [];
+      for (let i in nodes) {
+        let node = nodes[i];
+        if (!(node.id in global_state._selected_nodes)) {
+          new_selected.push(node);
+        }
+      }
+      for (let i in global_state._selected_nodes) {
+        let node = global_state._selected_nodes[i];
+        if (!(node.id in nodes)) {
+          new_deselected.push(node);
+        }
+      }
+      global_state._selected_nodes = { ...nodes };
+      global_state.exec_selected(new_selected);
+      global_state.exec_deselected(new_deselected);
+    };
+
+
+    global_state.litegraph.start();
+
+
+    global_state.litegraph_canvas.resize();
+    LiteGraph.registerNodeType("gfx/PassNode", PassNode);
+    LiteGraph.registerNodeType("gfx/BackBufferNode", BackBufferNode);
+    LiteGraph.registerNodeType("gfx/DrawCallNode", DrawCallNode);
+    LiteGraph.registerNodeType("gfx/PipelineNode", PipelineNode);
+    LiteGraph.registerNodeType("gfx/VertexBufferNode", VertexBufferNode);
+    LiteGraph.registerNodeType("gfx/ModelNode", ModelNode);
+    LiteGraph.registerNodeType("gfx/TextureBufferNode", TextureBufferNode);
+    LiteGraph.registerNodeType("gfx/FeedbackNode", FeedbackNode);
+    LiteGraph.registerNodeType("gfx/FrameCountNode", FrameCountNode);
+    window.addEventListener('message', event => {
+      try {
+        let json = JSON.parse(event.data);
+        if ("type" in json) {
+          if (json.type == "set(graph.json)") {
+            let graph_json = JSON.parse(json.data);
+            init_litegraph(graph_json);
+          } else if (json.type == "get(graph.json)") {
+            let json = global_state.litegraph.serialize();
+            let str = JSON.stringify(json)
+            let msg = {};
+            msg.data = str;
+            msg.type = "graph.json";
+            if (window.parent != window)
+              window.parent.postMessage(JSON.stringify(msg), '*');
+          } else
+            console.log("unrecoginez command type: " + json.type);
+        } else
+          console.log("unrecoginez command: " + event);
+      } catch (e) {
+
+      }
+
+
+    });
+    window[random_string] = true;
+  }
+  // global_state.litegraph.clear();
   global_state.litegraph.configure(json, false);
   for (let i in global_state._on_reset_table) {
     global_state._on_reset_table[i]();
@@ -513,13 +585,19 @@ global_state.toposort = () => {
 };
 global_state.frame_count = 0;
 global_state.draw = () => {
-  let sorted_nodes = global_state.toposort();
-  // console.log(sorted_nodes);
-  sorted_nodes.forEach(node => { if (node.gl_init) node.gl_init(global_state.gl) });
-  sorted_nodes.forEach(node => { if (node.gl_render) node.gl_render(global_state.gl) });
-  Array.from(sorted_nodes).reverse().forEach(node => { if (node.gl_release) node.gl_release(global_state.gl) });
-  global_state.litegraph_canvas.setDirty(true);
-  global_state.frame_count += 1;
+  let json_backup = global_state.litegraph.serialize();
+  try {
+    let sorted_nodes = global_state.toposort();
+    sorted_nodes.forEach(node => { if (node.is_valid() && node.gl_init) node.gl_init(global_state.gl) });
+    sorted_nodes.forEach(node => { if (node.is_valid() && node.gl_render) node.gl_render(global_state.gl) });
+    Array.from(sorted_nodes).reverse().forEach(node => { if (node.is_valid() && node.gl_release) node.gl_release(global_state.gl) });
+    global_state.litegraph_canvas.setDirty(true);
+    global_state.frame_count += 1;
+  } catch (e) {
+    console.log(e);
+    console.log("the emergency copy of the graph is dumped");
+    console.log(JSON.stringify(json_backup));
+  }
   // global_state.periodic_draw = setTimeout(global_state.draw, 100);
 };
 global_state.update_thumbnails = () => {
@@ -534,7 +612,23 @@ global_state.update_thumbnails = () => {
 //   * camera node(generates look,up,left vectors and view/projection/inverse matrices)
 // * update propagation?
 
-let graph_list = ['default_graph.json', 'ltc.json', 'feedback_test.json'];
+let graph_list = [
+  'examples/default_graph.json',
+  'examples/multipass_test.json',
+  'examples/ltc.json',
+  'examples/feedback_test.json'
+];
+global_state.load_graph = (url) => {
+  fetch(url)
+    .then(response => response.text())
+    .then(text => {
+      try {
+        init_litegraph(JSON.parse(text));
+      } catch (e) {
+        console.log(e);
+      }
+    });
+};
 
 class LoadGraphButton extends React.Component {
   constructor(props, context) {
@@ -640,6 +734,9 @@ class MyLGraphNode extends LGraphNode {
         }
       });
     }
+  }
+  is_valid = () => {
+    return true;
   }
 }
 
@@ -1305,9 +1402,6 @@ class TextureBufferNode extends MyLGraphNode {
     this.properties = {
       src: null
     };
-    this.properties = {
-      src: null
-    };
     global_state.on_src_change((src_name) => {
       if (src_name == this.properties.src) {
         this.set_dirty();
@@ -1371,6 +1465,10 @@ class TextureBufferNode extends MyLGraphNode {
     return this.gl.texture;
   }
 
+  is_valid = () => {
+    return this.properties.src != null;
+  }
+
   gl_init = (gl) => {
     var texture = gl.createTexture();
     this.gl = {};
@@ -1400,7 +1498,7 @@ class TextureBufferNode extends MyLGraphNode {
         data = new Uint32Array(this.buf.data);
       }
         break;
-      default: throw Error('Unsupported format. Please add!');
+      default: throw Error(`Unsupported format ${this.buf.format}. Please add!`);
     };
     // console.log(data);
     gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border,
@@ -1518,13 +1616,20 @@ class DrawCallNode extends MyLGraphNode {
     this.set_inputs(sat);
   }
 
+  is_valid = () => {
+    let pipeline = this.getInputNodeByName("pipeline");
+    if (pipeline == null || !pipeline.is_valid())
+      return false;
+    let mesh_input = this.getInputNodeByName("mesh");
+    if (mesh_input == null || !mesh_input.is_valid())
+      return false;
+    return true;
+  }
+
   gl_init = (gl) => {
     let pipeline = this.getInputNodeByName("pipeline");
-    if (pipeline == null)
-      return;
     let mesh_input = this.getInputNodeByName("mesh");
-    if (!mesh_input)
-      return;
+    assert (mesh_input && pipeline);
     this.gl = {};
     this.gl.arrays = [];
     this.gl.buffers = [];
@@ -1839,7 +1944,13 @@ class PassNode extends MyLGraphNode {
     // this.setOutputData(0, "texture_0");
   }
 
+  is_valid = () => {
+    return this.properties.rts.length != 0 || this.properties.depth;
+  }
+
   gl_init = (gl) => {
+    if (!this.is_valid())
+      return;
     this.gl = { fb: null, rts: [] };
     this.gl.fb = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.gl.fb);
@@ -2115,109 +2226,24 @@ class PassNode extends MyLGraphNode {
 class GraphNodeComponent extends React.Component {
   constructor(props, context) {
     super(props, context);
-    this.graph = global_state.litegraph;
     this.onResize = this.onResize.bind(this);
     this.dumpJson = this.dumpJson.bind(this);
   }
 
   componentDidMount() {
-
-    global_state.litegraph_canvas = new LGraphCanvas("#tmp_canvas", this.graph);
-    global_state._selected_nodes = {};
-    global_state.litegraph_canvas.onSelectionChange = (
-      nodes
-    ) => {
-      // console.log("selection changed to"); console.log(nodes);
-      let new_selected = [];
-      let new_deselected = [];
-      for (let i in nodes) {
-        let node = nodes[i];
-        if (!(node.id in global_state._selected_nodes)) {
-          new_selected.push(node);
-        }
-      }
-      for (let i in global_state._selected_nodes) {
-        let node = global_state._selected_nodes[i];
-        if (!(node.id in nodes)) {
-          new_deselected.push(node);
-        }
-      }
-      global_state._selected_nodes = { ...nodes };
-      // console.log("new_selected"); console.log(new_selected);
-      // console.log("new_deselected"); console.log(new_deselected);
-      global_state.exec_selected(new_selected);
-      global_state.exec_deselected(new_deselected);
-    };
-    // global_state.litegraph_canvas.onNodeSelected = (
-    //   node
-    // ) => {
-    //   console.log("selected" + node);
-    //   global_state.exec_selected([node]);
-    // };
-
-    // global_state.litegraph_canvas.onNodeDeselected = (
-    //   node
-    // ) => {
-    //   console.log("deselected" + node);
-    //   global_state.exec_deselected([node]);
-    // };
-
-
-    this.graph.start();
-
+    global_state.load_graph(graph_list[0]);
     this.props.glContainer.on('resize', this.onResize);
-    global_state.litegraph_canvas.resize();
-
-    // Register nodesw
-    LiteGraph.registerNodeType("gfx/PassNode", PassNode);
-    LiteGraph.registerNodeType("gfx/BackBufferNode", BackBufferNode);
-    LiteGraph.registerNodeType("gfx/DrawCallNode", DrawCallNode);
-    LiteGraph.registerNodeType("gfx/PipelineNode", PipelineNode);
-    LiteGraph.registerNodeType("gfx/VertexBufferNode", VertexBufferNode);
-    LiteGraph.registerNodeType("gfx/ModelNode", ModelNode);
-    LiteGraph.registerNodeType("gfx/TextureBufferNode", TextureBufferNode);
-    LiteGraph.registerNodeType("gfx/FeedbackNode", FeedbackNode);
-    LiteGraph.registerNodeType("gfx/FrameCountNode", FrameCountNode);
-    // Load default json scene
-    fetch('default_graph.json')
-      .then(response => response.text())
-      .then(text => {
-        init_litegraph(JSON.parse(text));
-      });
     this.onResize();
-    window.addEventListener('message', event => {
-      try {
-        let json = JSON.parse(event.data);
-        if ("type" in json) {
-          if (json.type == "set(graph.json)") {
-            let graph_json =  JSON.parse(json.data);
-            init_litegraph(graph_json);
-          } else if (json.type == "get(graph.json)") {
-            let json = this.graph.serialize();
-            let str = JSON.stringify(json)
-            let msg = {};
-            msg.data = str;
-            msg.type = "graph.json";
-            if (window.parent != window)
-              window.parent.postMessage(JSON.stringify(msg), '*');
-          } else
-            console.log("unrecoginez command type: " + json.type);
-        } else
-          console.log("unrecoginez command: " + event);
-      } catch (e) {
 
-      }
-
-    });
   }
 
   onResize = () => {
     let parent = document.getElementById("tmp_canvas_container");
-    global_state.litegraph_canvas.resize(parent.offsetWidth, parent.offsetHeight - 70);
+    global_state.on_resize(parent.offsetWidth, parent.offsetHeight - 70);
   }
 
   dumpJson() {
-   
+
     // console.log();
     // https://stackoverflow.com/questions/400212/how-do-i-copy-to-the-clipboard-in-javascript?page=1&tab=votes#tab-top
     function copyTextToClipboard(text) {
@@ -2246,7 +2272,7 @@ class GraphNodeComponent extends React.Component {
 
       document.body.removeChild(textArea);
     }
-    let json = this.graph.serialize();
+    let json = global_state.litegraph.serialize();
     let str = JSON.stringify(json)
     // let msg = {};
     // msg.data = str;
@@ -2358,6 +2384,8 @@ class TextEditorComponent extends React.Component {
   }
 
   rebuildGui = () => {
+    if (!("litegraph" in global_state))
+      return;
     this.datgui = new dat.GUI({ autoPlace: false });
     this.src_list = [];
     this.datgui_state = {
