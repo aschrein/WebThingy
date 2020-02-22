@@ -2185,6 +2185,30 @@ class GraphNodeComponent extends React.Component {
         init_litegraph(JSON.parse(text));
       });
     this.onResize();
+    window.addEventListener('message', event => {
+      try {
+        let json = JSON.parse(event.data);
+        if ("type" in json) {
+          if (json.type == "set(graph.json)") {
+            let graph_json =  JSON.parse(json.data);
+            init_litegraph(graph_json);
+          } else if (json.type == "get(graph.json)") {
+            let json = this.graph.serialize();
+            let str = JSON.stringify(json)
+            let msg = {};
+            msg.data = str;
+            msg.type = "graph.json";
+            if (window.parent != window)
+              window.parent.postMessage(JSON.stringify(msg), '*');
+          } else
+            console.log("unrecoginez command type: " + json.type);
+        } else
+          console.log("unrecoginez command: " + event);
+      } catch (e) {
+
+      }
+
+    });
   }
 
   onResize = () => {
@@ -2193,7 +2217,7 @@ class GraphNodeComponent extends React.Component {
   }
 
   dumpJson() {
-    var json = this.graph.serialize();
+   
     // console.log();
     // https://stackoverflow.com/questions/400212/how-do-i-copy-to-the-clipboard-in-javascript?page=1&tab=votes#tab-top
     function copyTextToClipboard(text) {
@@ -2222,7 +2246,14 @@ class GraphNodeComponent extends React.Component {
 
       document.body.removeChild(textArea);
     }
-    copyTextToClipboard(JSON.stringify(json));
+    let json = this.graph.serialize();
+    let str = JSON.stringify(json)
+    // let msg = {};
+    // msg.data = str;
+    // msg.type = "graph.json";
+    // if (window.parent != window)
+    //   window.parent.postMessage(JSON.stringify(msg), '*');
+    copyTextToClipboard(str);
 
   }
 
@@ -2377,7 +2408,7 @@ class TextEditorComponent extends React.Component {
       tabSize: 2,
       useSoftTabs: true,
       navigateWithinSoftTabs: true
-      
+
     });
   }
 

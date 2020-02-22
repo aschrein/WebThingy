@@ -140,9 +140,9 @@ THE SOFTWARE.
           var pos = type.lastIndexOf("/");
           base_class.category = type.substr(0, pos);
 
-          if (!base_class.title) {
-              base_class.title = classname;
-          }
+          // if (!base_class.title) {
+          base_class.title = classname;
+          // }
           //info.name = name.substr(pos+1,name.length - pos);
 
           //extend class
@@ -4776,6 +4776,7 @@ if(this.graph)
       //touch events
       //if( 'touchstart' in document.documentElement )
       {
+          this.touchHandler = this.touchHandler.bind(this);
           canvas.addEventListener("touchstart", this.touchHandler, true);
           canvas.addEventListener("touchmove", this.touchHandler, true);
           canvas.addEventListener("touchend", this.touchHandler, true);
@@ -8663,7 +8664,6 @@ LGraphCanvas.prototype.drawLinkTooltip = function( ctx, link )
       //initMouseEvent(type, canBubble, cancelable, view, clickCount,
       //           screenX, screenY, clientX, clientY, ctrlKey,
       //           altKey, shiftKey, metaKey, button, relatedTarget);
-
       var window = this.getCanvasWindow();
       var document = window.document;
 
