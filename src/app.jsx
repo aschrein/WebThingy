@@ -48,8 +48,11 @@ function init_litegraph(json) {
   // Setup per window
   let random_string = "d8e605d156e5efb221c3198dcd4bcba2";
   if (!(random_string in window)) {
+    let canvas =  document.getElementById("tmp_canvas");
+    // window.GL.create({ canvas: canvas});
     global_state.litegraph = new LGraph();
-    global_state.litegraph_canvas = new LGraphCanvas("#tmp_canvas", global_state.litegraph);
+    global_state.litegraph_canvas = new LGraphCanvas(canvas, global_state.litegraph);
+    // global_state.litegraph_canvas = global_state.litegraph.canvas;
     global_state._selected_nodes = {};
     global_state.litegraph_canvas.onSelectionChange = (
       nodes
@@ -614,6 +617,7 @@ global_state.update_thumbnails = () => {
 
 let graph_list = [
   'examples/default_graph.json',
+  'examples/disjoint_test.json',
   'examples/multipass_test.json',
   'examples/ltc.json',
   'examples/feedback_test.json'
@@ -1116,8 +1120,47 @@ class PipelineNode extends MyLGraphNode {
     this.properties = {
       vs: null,
       ps: null,
-      attributes: null,
-      uniforms: null
+      depth_state: {
+        enable: true,
+        func: "LEQUAL",
+        write: true
+      },
+      blend_state: {
+        enable: false,
+        dst_rgb: "ZERO",
+        src_rgb: "ONE",
+        dst_alpha: "ZERO",
+        src_alpha: "ONE",
+        func_rgb: "FUNC_ADD",
+        func_alpha: "FUNC_ADD",
+      },
+      // @TODO: Stencil state
+      // stencil_state: {
+      //   enable: false,
+      //   func: "ALWAYS",
+      //   fail: "KEEP",
+      //   pass_depth_fail: "KEEP",
+      //   pass_depth_pass: "KEEP",
+      //   ref: 0x0,
+      //   value_mask: 0xff,
+      //   writemask: 0xff,
+      //   back_func: "ALWAYS",
+      //   back_fail: "KEEP",
+      //   back_pass_depth_fail: "KEEP",
+      //   back_pass_depth_pass: "KEEP",
+      //   back_ref: 0x0,
+      //   back_value_mask: 0xff,
+      //   back_writemask: 0xff
+      // },
+      cull_state: {
+        enable: false,
+        face_mode: "BACK",
+        front_face: "CCW"
+      },
+      cache: {
+        attributes: null,
+        uniforms: null
+      }
     };
     this.addOutput("out", "pipeline_t");
     this.title = "Pipeline";
@@ -1205,14 +1248,81 @@ class PipelineNode extends MyLGraphNode {
 
   bind = (gl) => {
     gl.useProgram(this.gl.program);
-    gl.disable(gl.CULL_FACE);
-    gl.frontFace(gl.CW);
-    gl.depthMask(true);
-    gl.enable(gl.DEPTH_TEST);
+    if ("cull_state" in this.properties) {
+      let cull_state = this.properties.cull_state;
+      if (cull_state.enable)
+        gl.enable(gl.CULL_FACE);
+      else
+        gl.disable(gl.CULL_FACE);
+      let front_face_map = {
+        "CW": gl.CW,
+        "CCW": gl.CCW
+      };
+      let cull_mode_map = {
+        "FRONT": gl.FRONT, "BACK": gl.BACK, "FRONT_AND_BACK": gl.FRONT_AND_BACK
+      };
+
+      gl.frontFace(front_face_map[cull_state.front_face]);
+      gl.cullFace(cull_mode_map[cull_state.face_mode]);
+    } else {
+      gl.disable(gl.CULL_FACE);
+    }
+    if ("blend_state" in this.properties) {
+      let blend_map = {
+        "ZERO": gl.ZERO, "ONE": gl.ONE, "SRC_COLOR": gl.SRC_COLOR,
+        "ONE_MINUS_SRC_COLOR": gl.ONE_MINUS_SRC_COLOR, "DST_COLOR": gl.DST_COLOR,
+        "ONE_MINUS_DST_COLOR": gl.ONE_MINUS_DST_COLOR, "SRC_ALPHA": gl.SRC_ALPHA,
+        "ONE_MINUS_SRC_ALPHA": gl.ONE_MINUS_SRC_ALPHA, "DST_ALPHA": gl.DST_ALPHA,
+        "ONE_MINUS_DST_ALPHA": gl.ONE_MINUS_DST_ALPHA, "CONSTANT_COLOR": gl.CONSTANT_COLOR,
+        "ONE_MINUS_CONSTANT_COLOR": gl.ONE_MINUS_CONSTANT_COLOR,
+        "CONSTANT_ALPHA": gl.CONSTANT_ALPHA,
+        "ONE_MINUS_CONSTANT_ALPHA": gl.ONE_MINUS_CONSTANT_ALPHA,
+        "SRC_ALPHA_SATURATE": gl.SRC_ALPHA_SATURATE
+      };
+      let blend_state = this.properties.blend_state;
+      if (blend_state.enable)
+        gl.enable(gl.BLEND);
+      else
+        gl.disable(gl.BLEND);
+
+      const srcRGBFunc = blend_map[blend_state.src_rgb];
+      const dstRGBFunc = blend_map[blend_state.dst_rgb];
+      const srcAlphaFunc = blend_map[blend_state.dst_alpha];
+      const dstAlphaFunc = blend_map[blend_state.src_alpha];
+
+      gl.blendFuncSeparate(
+        srcRGBFunc, dstRGBFunc, srcAlphaFunc, dstAlphaFunc);
+
+      let blend_funcs = {
+        "FUNC_ADD": gl.FUNC_ADD,
+        "FUNC_SUBTRACT": gl.FUNC_SUBTRACT, "FUNC_REVERSE_SUBTRACT": gl.FUNC_REVERSE_SUBTRACT
+      };
+      const rgbEquation = blend_funcs[blend_state.func_rgb];
+      const alphaEquation = blend_funcs[blend_state.func_alpha];
+      gl.blendEquationSeparate(rgbEquation, alphaEquation);
+    } else {
+      gl.disable(gl.BLEND);
+    }
+
+    let cmp_table = {
+      "NEVER": gl.NEVER, "LESS": gl.LESS, "EQUAL": gl.EQUAL, "LEQUAL": gl.LEQUAL,
+      "GREATER": gl.GREATER, "NOTEQUAL": gl.NOTEQUAL, "GEQUAL": gl.GEQUAL, "ALWAYS": gl.ALWAYS
+    };
+
+    if ("depth_state" in this.properties) {
+      let depth_state = this.properties.depth_state;
+      if (depth_state.enable)
+        gl.enable(gl.DEPTH_TEST);
+      else
+        gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(depth_state.write);
+      gl.depthFunc(cmp_table[depth_state.func]);
+    }
+
     gl.disable(gl.SCISSOR_TEST);
-    gl.depthFunc(gl.LEQUAL);
-    gl.disable(gl.BLEND);
-    gl.blendFunc(gl.ONE, gl.ONE);
+    // @TODO: Stencil state
+    gl.disable(gl.STENCIL_TEST);
+
     return true;
   }
 
@@ -1234,16 +1344,72 @@ class PipelineNode extends MyLGraphNode {
   display = (propnode) => {
 
     let src_list = [];
-    // console.log(pipeline);
     let datgui_state = {
       select_vs: this.properties.vs,
       select_ps: this.properties.ps,
     };
+
+    /*
+    str = {};
+    let arr = ;
+    for (let i in arr) {
+    str+="\"" + arr[i] + "\": gl." + arr[i] + ",";
+    }
+    */
+
+    let depth_cmps = ["NEVER", "LESS", "EQUAL", "LEQUAL", "GREATER", "NOTEQUAL", "GEQUAL", "ALWAYS"];
     Object.keys(global_state.litegraph.config.srcs).forEach(e => src_list.push(e));
     propnode.datgui.add(datgui_state, 'select_vs', src_list)
       .onChange((v) => this.set_vs(v));
     propnode.datgui.add(datgui_state, 'select_ps', src_list)
       .onChange((v) => this.set_ps(v));
+    let depth_state = propnode.datgui.addFolder("Depth state");
+    depth_state.add(this.properties.depth_state, 'enable');
+    depth_state.add(this.properties.depth_state, 'write');
+    depth_state.add(this.properties.depth_state, 'func', depth_cmps);
+    depth_state.open();
+
+    let blend_ops = ["ZERO", "ONE", "SRC_COLOR", "ONE_MINUS_SRC_COLOR",
+      "DST_COLOR", "ONE_MINUS_DST_COLOR", "SRC_ALPHA", "ONE_MINUS_SRC_ALPHA",
+      "DST_ALPHA", "ONE_MINUS_DST_ALPHA", "CONSTANT_COLOR", "ONE_MINUS_CONSTANT_COLOR",
+      "CONSTANT_ALPHA", "ONE_MINUS_CONSTANT_ALPHA", "SRC_ALPHA_SATURATE"];
+
+    let blend_funcs = ["FUNC_ADD", "FUNC_SUBTRACT", "FUNC_REVERSE_SUBTRACT"];
+
+    let blend_state = propnode.datgui.addFolder("Blend state");
+    blend_state.add(this.properties.blend_state, 'enable');
+    blend_state.add(this.properties.blend_state, 'dst_rgb', blend_ops);
+    blend_state.add(this.properties.blend_state, 'src_rgb', blend_ops);
+    blend_state.add(this.properties.blend_state, 'dst_alpha', blend_ops);
+    blend_state.add(this.properties.blend_state, 'src_alpha', blend_ops);
+    blend_state.add(this.properties.blend_state, 'func_rgb', blend_funcs);
+    blend_state.add(this.properties.blend_state, 'func_alpha', blend_funcs);
+    blend_state.open();
+
+    let cull_state = propnode.datgui.addFolder("Cull state");
+    cull_state.add(this.properties.cull_state, 'enable');
+    cull_state.add(this.properties.cull_state, 'face_mode', ["FRONT", "BACK", "FRONT_AND_BACK"]);
+    cull_state.add(this.properties.cull_state, 'front_face', ["CW", "CCW"]);
+    cull_state.open();
+
+    // let stencil_state = propnode.datgui.addFolder("Stencil state");
+    // let stencil_ops = ["KEEP", "ZERO", "REPLACE", "INCR", "INCR_WRAP", "DECR", "DECR_WRAP", "INVERT"];
+    // stencil_state.add(this.properties.stencil_state, 'enable');
+    // stencil_state.add(this.properties.stencil_state, 'func', depth_cmps);
+    // stencil_state.add(this.properties.stencil_state, 'fail', stencil_ops);
+    // stencil_state.add(this.properties.stencil_state, 'pass_depth_fail', stencil_ops);
+    // stencil_state.add(this.properties.stencil_state, 'pass_depth_pass', stencil_ops);
+    // stencil_state.add(this.properties.stencil_state, 'ref');
+    // stencil_state.add(this.properties.stencil_state, 'value_mask');
+    // stencil_state.add(this.properties.stencil_state, 'writemask');
+    // stencil_state.add(this.properties.stencil_state, 'back_func', depth_cmps);
+    // stencil_state.add(this.properties.stencil_state, 'back_fail', stencil_ops);
+    // stencil_state.add(this.properties.stencil_state, 'back_pass_depth_fail', stencil_ops);
+    // stencil_state.add(this.properties.stencil_state, 'back_pass_depth_pass', stencil_ops);
+    // stencil_state.add(this.properties.stencil_state, 'back_ref');
+    // stencil_state.add(this.properties.stencil_state, 'back_value_mask');
+    // stencil_state.add(this.properties.stencil_state, 'back_writemask');
+    // stencil_state.open();
   }
 
   update = () => {
@@ -1253,7 +1419,10 @@ class PipelineNode extends MyLGraphNode {
   get_info = () => {
     if (!this.valid)
       this.parse_shaders();
-    return { attributes: this.properties.attributes, uniforms: this.properties.uniforms, valid: this.valid };
+    return {
+      attributes: this.properties.cache.attributes, uniforms:
+        this.properties.cache.uniforms, valid: this.valid
+    };
   }
 
   parse_shaders = () => {
@@ -1261,19 +1430,20 @@ class PipelineNode extends MyLGraphNode {
     this.valid = false;
     let uniform_set = new Set();
 
-    this.properties.attributes = [];
-    this.properties.uniforms = [];
+    this.properties.cache.attributes = [];
+    this.properties.cache.uniforms = [];
     if (this.properties.vs != null) {
       try {
         // Parse vertex shader for attributes
         if (typeof window.glslang == "undefined")
           throw Error("glslang is not ready");
-        let str = window.glslang.parse_attributes(global_state.get_src(this.properties.vs), "vertex");
+        let str = window.glslang.parse_attributes(global_state.get_src(this.properties.vs),
+          "vertex");
         let json = JSON.parse(str);
         // console.log(str);
         for (var i = 0; i < json.attributes.length - 1; i++) {
           let attrib = json.attributes[i];
-          this.properties.attributes.push({ name: attrib.name, type: attrib.type });
+          this.properties.cache.attributes.push({ name: attrib.name, type: attrib.type });
         }
         for (var i = 0; i < json.uniforms.length - 1; i++) {
           let uniform = json.uniforms[i];
@@ -1283,11 +1453,12 @@ class PipelineNode extends MyLGraphNode {
           if (uniform.name[0] == "_")
             continue;
           uniform_set.add(uniform.name);
-          this.properties.uniforms.push({ name: uniform.name, type: uniform.type });
+          this.properties.cache.uniforms.push({ name: uniform.name, type: uniform.type });
         }
         // ps uniform parsing
         {
-          let str = window.glslang.parse_attributes(global_state.get_src(this.properties.ps), "fragment");
+          let str = window.glslang.parse_attributes(global_state.get_src(this.properties.ps),
+            "fragment");
           let json = JSON.parse(str);
           // console.log(str);
           for (var i = 0; i < json.uniforms.length - 1; i++) {
@@ -1298,7 +1469,7 @@ class PipelineNode extends MyLGraphNode {
             if (uniform.name[0] == "_")
               continue;
             uniform_set.add(uniform.name);
-            this.properties.uniforms.push({ name: uniform.name, type: uniform.type });
+            this.properties.cache.uniforms.push({ name: uniform.name, type: uniform.type });
           }
         }
         this.valid = true;
@@ -1629,7 +1800,7 @@ class DrawCallNode extends MyLGraphNode {
   gl_init = (gl) => {
     let pipeline = this.getInputNodeByName("pipeline");
     let mesh_input = this.getInputNodeByName("mesh");
-    assert (mesh_input && pipeline);
+    assert(mesh_input && pipeline);
     this.gl = {};
     this.gl.arrays = [];
     this.gl.buffers = [];
@@ -1856,6 +2027,7 @@ class PassNode extends MyLGraphNode {
     this.onPropertyChange = (prop, val) => {
       this.update_outputs();
     };
+    this.thumbnail_size = 256;
   }
 
   gl_render = (gl) => {
@@ -2074,7 +2246,10 @@ class PassNode extends MyLGraphNode {
     if (this.gl.depth)
       rts.push(this.gl.depth);
     for (let i in rts) {
-      let image_data = global_state.get_texture_data(rts[i]);
+      let image_data = global_state.get_texture_data(rts[i],
+        // this.properties.rts[i].format,
+        "RGBA32F",
+        this.thumbnail_size, this.thumbnail_size);
 
       let tmp_canvas = document.createElement("canvas");
       let tmp_canvasContext = tmp_canvas.getContext("2d");
@@ -2182,7 +2357,8 @@ class PassNode extends MyLGraphNode {
     var yoffset = 32 + this.inputs.length * 20;
     var xoffset = 16;
     var border = 16;
-    var size = this.size[0] - border * 2;;
+    var size = this.size[0] - border * 2;
+    this.thumbnail_size = size;
     for (let i in this.properties.rts) {
       if ("thumbnails" in this && i < this.thumbnails.length) {
         ctx.drawImage(this.thumbnails[i], xoffset, yoffset, size, size);
@@ -2547,7 +2723,7 @@ class PropertiesNode extends React.Component {
   display_node = (node) => {
     if (node == null)
       return;
-    this.datgui = new dat.GUI({ autoPlace: false });
+    this.datgui = new dat.GUI({ autoPlace: false, width: "100%" });
     if ("display" in node) {
       node.display(this);
     }

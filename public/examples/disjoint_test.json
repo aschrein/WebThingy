@@ -1,0 +1,508 @@
+{
+  "last_node_id": 11,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "gfx/PassNode",
+      "pos": {
+        "0": 433.82183837890625,
+        "1": 7.352408409118652,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 210,
+        "1": 32
+      },
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Pass",
+      "properties": {
+        "viewport": {
+          "width": 512,
+          "height": 512
+        },
+        "rts": [],
+        "depth": null,
+        "dc_cnt": 0
+      }
+    },
+    {
+      "id": 6,
+      "type": "gfx/ModelNode",
+      "pos": {
+        "0": 670.5667724609375,
+        "1": 601.630615234375,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "mesh",
+          "type": "mesh_t",
+          "links": null
+        }
+      ],
+      "title": "Model",
+      "properties": {
+        "fileurl": null
+      }
+    },
+    {
+      "id": 8,
+      "type": "gfx/FeedbackNode",
+      "pos": {
+        "0": 258.2762451171875,
+        "1": 625.7882690429688,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "in",
+          "type": "uniform_t",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "uniform_t",
+          "links": null
+        }
+      ],
+      "title": "Feedback",
+      "properties": {}
+    },
+    {
+      "id": 9,
+      "type": "gfx/FrameCountNode",
+      "pos": {
+        "0": 161.64564514160156,
+        "1": 186.1190185546875,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 210,
+        "1": 58
+      },
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "0",
+          "type": "uniform_t",
+          "links": null,
+          "label": "0"
+        }
+      ],
+      "title": "Frame count",
+      "properties": {}
+    },
+    {
+      "id": 2,
+      "type": "gfx/BackBufferNode",
+      "pos": {
+        "0": 376,
+        "1": 332,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 140
+      },
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "in",
+          "type": "uniform_t",
+          "link": null
+        }
+      ],
+      "outputs": [],
+      "title": "Back Buffer",
+      "properties": {}
+    },
+    {
+      "id": 4,
+      "type": "gfx/PipelineNode",
+      "pos": {
+        "0": 525,
+        "1": 145,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "pipeline_t",
+          "links": [
+            3
+          ]
+        }
+      ],
+      "title": "Pipeline",
+      "properties": {
+        "vs": null,
+        "ps": null,
+        "depth_state": {
+          "enable": true,
+          "func": "LEQUAL",
+          "write": true
+        },
+        "blend_state": {
+          "enable": false,
+          "dst_rgb": "ZERO",
+          "src_rgb": "ONE",
+          "dst_alpha": "ZERO",
+          "src_alpha": "ONE",
+          "func_rgb": "FUNC_ADD",
+          "func_alpha": "FUNC_ADD"
+        },
+        "stencil_state": {
+          "enable": false,
+          "func": "ALWAYS",
+          "fail": "KEEP",
+          "pass_depth_fail": "KEEP",
+          "pass_depth_pass": "KEEP",
+          "ref": 0,
+          "value_mask": 255,
+          "writemask": 255,
+          "back_func": "ALWAYS",
+          "back_fail": "KEEP",
+          "back_pass_depth_fail": "KEEP",
+          "back_pass_depth_pass": "KEEP",
+          "back_ref": 0,
+          "back_value_mask": 255,
+          "back_writemask": 255
+        },
+        "cull_state": {
+          "cull_face": false,
+          "cull_face_mode": "BACK",
+          "front_face": "CCW"
+        },
+        "cache": {
+          "attributes": [],
+          "uniforms": []
+        },
+        "attributes": [],
+        "uniforms": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "gfx/DrawCallNode",
+      "pos": {
+        "0": 800,
+        "1": 226,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 46
+      },
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "pipeline",
+          "type": "pipeline_t",
+          "link": 3
+        },
+        {
+          "name": "mesh",
+          "type": "mesh_t",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "drawcall_t",
+          "links": null
+        }
+      ],
+      "title": "Draw Call",
+      "properties": {}
+    },
+    {
+      "id": 5,
+      "type": "gfx/VertexBufferNode",
+      "pos": {
+        "0": 590,
+        "1": 422,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "mesh",
+          "type": "mesh_t",
+          "links": [
+            1
+          ]
+        }
+      ],
+      "title": "Vertex Buffer",
+      "properties": {
+        "src": null
+      }
+    },
+    {
+      "id": 10,
+      "type": "gfx/PipelineNode",
+      "pos": {
+        "0": 741,
+        "1": 52,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "pipeline_t",
+          "links": null
+        }
+      ],
+      "title": "Pipeline",
+      "properties": {
+        "vs": null,
+        "ps": null,
+        "depth_state": {
+          "enable": true,
+          "func": "LEQUAL",
+          "write": true
+        },
+        "blend_state": {
+          "enable": false,
+          "dst_rgb": "ZERO",
+          "src_rgb": "ONE",
+          "dst_alpha": "ZERO",
+          "src_alpha": "ONE",
+          "func_rgb": "FUNC_ADD",
+          "func_alpha": "FUNC_ADD"
+        },
+        "stencil_state": {
+          "enable": false,
+          "func": "ALWAYS",
+          "fail": "KEEP",
+          "pass_depth_fail": "KEEP",
+          "pass_depth_pass": "KEEP",
+          "ref": 0,
+          "value_mask": 255,
+          "writemask": 255,
+          "back_func": "ALWAYS",
+          "back_fail": "KEEP",
+          "back_pass_depth_fail": "KEEP",
+          "back_pass_depth_pass": "KEEP",
+          "back_ref": 0,
+          "back_value_mask": 255,
+          "back_writemask": 255
+        },
+        "cull_state": {
+          "cull_face": false,
+          "cull_face_mode": "BACK",
+          "front_face": "CCW"
+        },
+        "cache": {
+          "attributes": [],
+          "uniforms": []
+        },
+        "attributes": null,
+        "uniforms": null
+      }
+    },
+    {
+      "id": 11,
+      "type": "gfx/ModelNode",
+      "pos": {
+        "0": 839,
+        "1": 434,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": {
+        "0": 140,
+        "1": 26
+      },
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "mesh",
+          "type": "mesh_t",
+          "links": null
+        }
+      ],
+      "title": "Model",
+      "properties": {
+        "fileurl": null
+      }
+    },
+    {
+      "id": 7,
+      "type": "gfx/TextureBufferNode",
+      "pos": {
+        "0": 632,
+        "1": 674,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0,
+        "6": 0,
+        "7": 0,
+        "8": 0,
+        "9": 0
+      },
+      "size": [
+        140,
+        140
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Texture Buffer",
+      "properties": {
+        "src": null
+      }
+    }
+  ],
+  "links": [
+    [
+      1,
+      5,
+      0,
+      3,
+      1,
+      "mesh_t"
+    ],
+    [
+      3,
+      4,
+      0,
+      3,
+      0,
+      "pipeline_t"
+    ]
+  ],
+  "groups": [],
+  "config": {
+    "srcs": {}
+  },
+  "version": 0.4
+}
