@@ -48,7 +48,7 @@ function init_litegraph(json) {
   // Setup per window
   let random_string = "d8e605d156e5efb221c3198dcd4bcba2";
   if (!(random_string in window)) {
-    let canvas =  document.getElementById("tmp_canvas");
+    let canvas = document.getElementById("tmp_canvas");
     // window.GL.create({ canvas: canvas});
     global_state.litegraph = new LGraph();
     global_state.litegraph_canvas = new LGraphCanvas(canvas, global_state.litegraph);
@@ -86,7 +86,7 @@ function init_litegraph(json) {
     LiteGraph.registerNodeType("gfx/DrawCallNode", DrawCallNode);
     LiteGraph.registerNodeType("gfx/PipelineNode", PipelineNode);
     LiteGraph.registerNodeType("gfx/VertexBufferNode", VertexBufferNode);
-    LiteGraph.registerNodeType("gfx/ModelNode", ModelNode);
+    LiteGraph.registerNodeType("gfx/SceneNode", SceneNode);
     LiteGraph.registerNodeType("gfx/TextureBufferNode", TextureBufferNode);
     LiteGraph.registerNodeType("gfx/FeedbackNode", FeedbackNode);
     LiteGraph.registerNodeType("gfx/FrameCountNode", FrameCountNode);
@@ -622,6 +622,11 @@ let graph_list = [
   'examples/ltc.json',
   'examples/feedback_test.json'
 ];
+let gltf_model_list = [
+  'models/gltf/dieselpunk_hovercraft/scene.gltf',
+  'models/head_lee_perry_smith/scene.gltf',
+  'models/LeePerrySmith/LeePerrySmith.gltf'
+];
 global_state.load_graph = (url) => {
   fetch(url)
     .then(response => response.text())
@@ -763,6 +768,22 @@ class FrameCountNode extends MyLGraphNode {
   }
 }
 
+class CameraNode extends MyLGraphNode {
+  constructor() {
+    super();
+    this.title = "Camera";
+    this.addOutput("view(mat4)", "uniform_t");
+    this.addOutput("proj(mat4)", "uniform_t");
+    this.addOutput("viewproj(mat4)", "uniform_t");
+    this.addOutput("look(vec3)", "uniform_t");
+    this.addOutput("up(vec3)", "uniform_t");
+    this.addOutput("right(vec3)", "uniform_t");
+    this.addOutput("nearz(float)", "uniform_t");
+    this.addOutput("farz(float)", "uniform_t");
+    this.addOutput("fov(float)", "uniform_t");
+  }
+}
+
 class Mesh {
   init = (attributes, indices) => {
     this.attributes = attributes;
@@ -800,8 +821,6 @@ class Mesh {
         this.images.push({ name: field, img: this.pbr_material[field].image });
       }
     });
-
-    // console.log(mesh.geometry);
   }
 
   get_attrib_data = (name) => {
@@ -813,28 +832,39 @@ class Mesh {
   }
 }
 
-class ModelNode extends MyLGraphNode {
+class SceneNode extends MyLGraphNode {
   constructor() {
     super();
-    this.title = "Model";
+    this.title = "Scene";
     this.properties = {
       fileurl: null,
     };
-    this.onPropertyChange = (prop, val) => {
+    this.onPropertyChanged = (prop, val) => {
       if (prop == "fileurl") {
-
+        this.load_url(val);
       }
     };
-    this.addOutput("mesh", "mesh_t");
+    this.addOutput("meshes", "mesh_t");
     this.meshes = [];
-    // let url = 'models/gltf/dieselpunk_hovercraft/scene.gltf';
-    let url = 'models/LeePerrySmith/LeePerrySmith.gltf';
+    this.gltf = null;
+    this.yoffset = 0;
+  }
+
+  load_url = (url) => {
+    if (!url)
+      return;
     gltf_loader.load(url, (gltf) => {
-      console.log(gltf);
+      this.meshes = [];
       this.gltf = gltf;
       this.traverse(gltf.scene);
-    });
-    this.yoffset = 0;
+      this.set_dirty();
+    },
+      () => { },
+      e => {
+        console.log("[ERROR] while loading model at: " + url);
+        this.meshes = [];
+        this.gltf = null;
+      });
   }
 
   traverse = (node) => {
@@ -858,84 +888,118 @@ class ModelNode extends MyLGraphNode {
   }
 
   display = (propnode) => {
-    var canvas1 = document.createElement("canvas");
-    var canvas2 = document.createElement("canvas");
     var div = document.createElement("div");
-    div.appendChild(canvas1);
-    div.style.cssText = "margin-top: 16px;";
-    {
-      var context = canvas1.getContext('webgl2', { alpha: false });
-      var renderer = new THREE.WebGLRenderer({ canvas: canvas1, context: context });
-      var controls;
-      var camera, scene;
-      camera = new THREE.PerspectiveCamera(45, 1.0, 0.25, 20);
-      camera.position.set(- 1.8, 0.6, 2.7);
+    if (this.gltf) {
+      {
+        var canvas1 = document.createElement("canvas");
+        div.appendChild(canvas1);
+        div.style.cssText = "margin-top: 16px;";
+        var context = canvas1.getContext('webgl2', { alpha: false });
+        var renderer = new THREE.WebGLRenderer({ canvas: canvas1, context: context });
+        var controls;
+        var camera, scene;
+        camera = new THREE.PerspectiveCamera(45, 1.0, 0.25, 20);
+        camera.position.set(- 1.8, 0.6, 2.7);
 
-      scene = new THREE.Scene();
-      var render = function () {
-        let parent = propnode.datgui.domElement.parentNode;
-        if (parent) {
-          canvas1.classList.add('margin_16');
-          renderer.setSize(parent.offsetWidth - 32, parent.offsetWidth - 32);
-        }
-        else
-          renderer.setSize(512, 512);
+        scene = new THREE.Scene();
+        var render = function () {
+          let parent = propnode.datgui.domElement.parentNode;
+          if (parent) {
+            canvas1.classList.add('margin_16');
+            renderer.setSize(parent.offsetWidth - 32, parent.offsetWidth - 32);
+          }
+          else
+            renderer.setSize(512, 512);
+          renderer.render(scene, camera);
+        };
+        var pmremGenerator = new THREE.PMREMGenerator(renderer);
+        pmremGenerator.compileEquirectangularShader();
+        new RGBELoader()
+          .setDataType(THREE.UnsignedByteType)
+          .setPath('textures/equirectangular/')
+          .load('venice_sunset_1k.hdr', (texture) => {
+
+            var envMap = pmremGenerator.fromEquirectangular(texture).texture;
+
+            scene.background = envMap;
+            scene.environment = envMap;
+
+            texture.dispose();
+            pmremGenerator.dispose();
+            scene.add(this.gltf.scene);
+
+            render();
+
+          });
+
+        renderer.setPixelRatio(1.0);
+
+        renderer.outputEncoding = THREE.sRGBEncoding;
+
+        let offset = 1.25;
+        const boundingBox = new THREE.Box3();
+        boundingBox.setFromObject(this.gltf.scene);
+        const size = boundingBox.getSize();
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraZ = Math.abs(maxDim / 4 * Math.tan(fov * 2));
+        cameraZ *= offset;
+        // camera.position.z = cameraZ;
+        const minZ = boundingBox.min.z;
+        const cameraToFarEdge = (minZ < 0) ? -minZ + cameraZ : cameraZ - minZ;
+
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.addEventListener('change', render);
+        controls.minDistance = maxDim;
+        controls.maxDistance = 1000;
+        controls.target.set(0, 0, 0);
+        controls.update();
+
+        camera.aspect = 1.0;
+        camera.far = 1000;
+        camera.far = cameraToFarEdge * 3;
+
+        camera.updateProjectionMatrix();
+
+
         renderer.render(scene, camera);
-      };
-      var pmremGenerator = new THREE.PMREMGenerator(renderer);
-      pmremGenerator.compileEquirectangularShader();
-      new RGBELoader()
-        .setDataType(THREE.UnsignedByteType)
-        .setPath('textures/equirectangular/')
-        .load('venice_sunset_1k.hdr', (texture) => {
+      }
+      {
+        var canvas2 = document.createElement("canvas");
+        div.appendChild(canvas2);
+        let ctx = canvas2.getContext("2d");
+        var yoffset = 0;
+        var xoffset = 64;
+        var border = 16;
+        var size = 256;
+        canvas2.width = xoffset + size;
+        var height = 0;
+        var images = [];
+        for (let i in this.meshes) {
+          let mesh = this.meshes[i];
+          Object.keys(mesh.pbr_material).forEach(field => {
+            if (
+              mesh.pbr_material[field] &&
+              typeof (mesh.pbr_material[field]) == "object" &&
+              "image" in mesh.pbr_material[field]) {
+              images.push({ name: field, img: mesh.pbr_material[field].image });
+              height += size + border;
+            }
+          });
+        };
+        canvas2.height = height;
+        div.height = height + 256;
 
-          var envMap = pmremGenerator.fromEquirectangular(texture).texture;
-
-          scene.background = envMap;
-          scene.environment = envMap;
-
-          texture.dispose();
-          pmremGenerator.dispose();
-          scene.add(this.gltf.scene);
-
-          render();
-
+        images.forEach(img => {
+          ctx.fillStyle = "white";
+          ctx.fillText(img.name, 0, yoffset + 16);
+          ctx.drawImage(
+            img.img
+            , xoffset, yoffset, size, size);
+          yoffset += size + border;
         });
-
-      renderer.setPixelRatio(1.0);
-
-      renderer.outputEncoding = THREE.sRGBEncoding;
-
-      let offset = 1.25;
-      const boundingBox = new THREE.Box3();
-      boundingBox.setFromObject(this.gltf.scene);
-      const size = boundingBox.getSize();
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const fov = camera.fov * (Math.PI / 180);
-      let cameraZ = Math.abs(maxDim / 4 * Math.tan(fov * 2));
-      cameraZ *= offset;
-      // camera.position.z = cameraZ;
-      const minZ = boundingBox.min.z;
-      const cameraToFarEdge = (minZ < 0) ? -minZ + cameraZ : cameraZ - minZ;
-
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.addEventListener('change', render);
-      controls.minDistance = maxDim;
-      controls.maxDistance = 1000;
-      controls.target.set(0, 0, 0);
-      controls.update();
-
-      camera.aspect = 1.0;
-      camera.far = 1000;
-      camera.far = cameraToFarEdge * 3;
-
-      camera.updateProjectionMatrix();
-
-
-      renderer.render(scene, camera);
+      }
     }
-    div.appendChild(canvas2);
-
     // let folder = propnode.datgui.addFolder("Attributes");
     // for (let i in this.attributes) {
     //   let tmp = {
@@ -944,38 +1008,14 @@ class ModelNode extends MyLGraphNode {
     //   folder.add(tmp, "prop").name(i);
     // }
     // folder.open();
+    let proxy_state = {
+      fileurl: this.properties.fileurl
+    };
+    propnode.datgui.add(proxy_state, 'fileurl', gltf_model_list)
+      .onChange(v => this.setProperty('fileurl', v));
     propnode.datgui.domElement.appendChild(div);
     div.width = 512;
-    // {
-    //   let ctx = canvas2.getContext("2d");
-    //   var yoffset = 0;
-    //   var xoffset = 64;
-    //   var border = 16;
-    //   var size = 256;
-    //   canvas2.width = xoffset + size;
-    //   var height = 0;
-    //   var images = [];
-    //   Object.keys(this.pbr_material).forEach(field => {
-    //     if (
-    //       this.pbr_material[field] &&
-    //       typeof (this.pbr_material[field]) == "object" &&
-    //       "image" in this.pbr_material[field]) {
-    //       images.push({ name: field, img: this.pbr_material[field].image });
-    //       height += size + border;
-    //     }
-    //   });
-    //   canvas2.height = height;
-    //   div.height = height + 256;
 
-    //   images.forEach(img => {
-    //     ctx.fillStyle = "white";
-    //     ctx.fillText(img.name, 0, yoffset + 16);
-    //     ctx.drawImage(
-    //       img.img
-    //       , xoffset, yoffset, size, size);
-    //     yoffset += size + border;
-    //   });
-    // }
   }
 }
 
